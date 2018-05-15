@@ -8,7 +8,7 @@ import subprocess
 import time
 import pysam
 from sklearn.decomposition import PCA
-from lib.triarray import *
+from wisecondorX.triarray import *
 import warnings
 
 warnings.filterwarnings('ignore', 'Mean of empty slice')

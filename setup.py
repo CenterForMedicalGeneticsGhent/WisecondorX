@@ -11,9 +11,9 @@ setup(
     author_email='Lennart.raman@ugent.be',
     description="WisecondorX -- an evolved WISECONDOR",
     long_description=__doc__,
-    keywords=['bioinformatics', 'biology', 'sequencing', 'NGS', 'next generation sequencing'
-              , 'CNV', 'SWGS', 'Shallow Whole Genome Sequencing'],
-    download_url='https://github.com/leraman/wisecondorX/archive/v{}.tar.gz'.format(dl_version),
+    keywords=['bioinformatics', 'biology', 'sequencing', 'NGS', 'next generation sequencing',
+              'CNV', 'SWGS', 'Shallow Whole Genome Sequencing'],
+    download_url='https://github.com/CenterForMedicalGeneticsGhent/WisecondorX/archive/v{}.tar.gz'.format(dl_version),
     license='Attribution-NonCommercial-ShareAlike CC BY-NC-SA',
     packages=find_packages('.'),
     python_requires='==2.7',
@@ -26,7 +26,7 @@ setup(
         'numpy'
     ],
     entry_points={
-        'console_scripts': ['WisecondorX = lib.main:main']
+        'console_scripts': ['WisecondorX = wisecondorX.main:main']
     },
     classifiers=[
         'Development Status :: 3 - Alpha',
