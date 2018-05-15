@@ -38,7 +38,7 @@ python setup.py install
 Alternatively, stable releases can be installed using [Conda](https://conda.io/docs/). This is the preferred option since Conda takes care of other dependencies too.
 ```bash
 
-conda install -c bioconda wisecondorX
+conda install -c bioconda WisecondorX
 ```
 
 ### Running wisecondorX

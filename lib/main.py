@@ -186,11 +186,11 @@ def tool_test(args):
 
     if args.beta < 0.05:
         logging.warning("Parameter beta seems to be a bit low. \n\t"
-                        "Have you read https://github.com/leraman/wisecondorX#parameters on parameter optimization?")
+                        "Have you read https://github.com/CenterForMedicalGeneticsGhent/wisecondorX#parameters on parameter optimization?")
 
     if args.alpha > 0.1:
         logging.warning("Parameter alpha seems to be a bit high. \n\t"
-                        "Have you read https://github.com/leraman/wisecondorX#parameters on parameter optimization?")
+                        "Have you read https://github.com/CenterForMedicalGeneticsGhent/wisecondorX#parameters on parameter optimization?")
 
     # Reference data handling
     mask_list = []
