@@ -163,5 +163,6 @@ restrictions on within-sample referencing, an important feature for NIPT:
     - scikit-learn (v0.19.1)
     - pysam (v0.13)
     - numpy (v1.13.3)
+    - futures (v3.2.0)
 
 And of course, other versions are very likely to work as well.  
