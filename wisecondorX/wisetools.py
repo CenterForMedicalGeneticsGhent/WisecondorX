@@ -7,8 +7,8 @@ import sys
 import subprocess
 import time
 import pysam
+import numpy as np
 from sklearn.decomposition import PCA
-from wisecondorX.triarray import *
 import warnings
 
 warnings.filterwarnings('ignore', 'Mean of empty slice')
@@ -424,11 +424,11 @@ def repeat_test(test_data, indexes, distances, chromosome_bins,
         test_copy[np_abs(results_z) >= threshold] = -1
     return results_z, results_r, ref_sizes, std_dev_avg
 
-
 def generate_txt_output(args, binsize, json_out):
     bed_file = open(args.outid + "_bins.bed", "w")
-    bed_file.write("chr\tstart\tend\tid\tratio\n")
+    bed_file.write("chr\tstart\tend\tid\tzscore\tratio\n")
     results_r = json_out["results_r"]
+    results_z = json_out["results_z"]
     for chr_i in range(len(results_r)):
         chr = str(chr_i + 1)
         if chr == "23":
@@ -438,10 +438,13 @@ def generate_txt_output(args, binsize, json_out):
         feat = 1
         for feat_i in range(len(results_r[chr_i])):
             r = results_r[chr_i][feat_i]
+            z = results_z[chr_i][feat_i]
             if r == 0:
                 r = "NaN"
+            if z == 0:
+                z = "NaN"
             feat_str = chr + ":" + str(feat) + "-" + str(feat + binsize - 1)
-            it = [chr, feat, feat + binsize - 1, feat_str, r]
+            it = [chr, feat, feat + binsize - 1, feat_str, z, r]
             it = [str(x) for x in it]
             bed_file.write("\t".join(it) + "\n")
             feat += binsize
@@ -469,7 +472,7 @@ def generate_txt_output(args, binsize, json_out):
     segments_file.close()
 
     statistics_file = open(args.outid + "_statistics.txt", "w")
-    statistics_file.write("chr ratio.mean ratio.median zscore.mean zscore.median\n")
+    statistics_file.write("chr ratio.mean ratio.median\n")
     chrom_scores = []
     for chr_i in range(len(results_r)):
         chr = str(chr_i + 1)
@@ -478,19 +481,15 @@ def generate_txt_output(args, binsize, json_out):
         if chr == "24":
             chr = "Y"
         R = [x for x in results_r[chr_i] if x != 0]
-        Z = [x for x in json_out["results_z"][chr_i] if x != 0]
 
         chrom_ratio_mean = np.mean(R)
         chrom_ratio_median = np.median(R)
-        chrom_z_mean = np.mean(Z)
-        chrom_z_median = np.median(Z)
 
-        statistics_file.write(str(chr) + " " + str(chrom_ratio_mean) + " " + str(chrom_ratio_median) +
-                              " " + str(chrom_z_mean) + " " + str(chrom_z_median) + "\n")
+        statistics_file.write(str(chr) + " " + str(chrom_ratio_mean) + " " + str(chrom_ratio_median) + "\n")
         chrom_scores.append(chrom_ratio_mean)
 
-    statistics_file.write("Standard deviation of mean chromosomal ratios: " + str(np.std(chrom_scores)) + "\n")
-    statistics_file.write("Median of all within-segment ratio variances: " + str(
+    statistics_file.write("Standard deviation ratio.mean: " + str(np.std(chrom_scores)) + "\n")
+    statistics_file.write("Median within-segment binwise ratio variance: " + str(
         get_median_within_segment_variance(segments, results_r)) + "\n")
     statistics_file.close()
 
@@ -594,7 +593,7 @@ def cbs(args, results_r, results_z, gender, wc_dir):
         z_segment = results_z[chr_i][start:end]
         z_segment = [x for x in z_segment if x != 0]
 
-        bm_score = np.median(z_segment) * 2
+        bm_score = np.mean(z_segment) * 2
         if math.isnan(bm_score):
             bm_score = 0.0
         bm_scores.append(bm_score)
