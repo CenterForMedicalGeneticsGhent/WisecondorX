@@ -173,7 +173,7 @@ def tool_test(args):
 
     if not args.bed and not args.plot:
         logging.critical("No output format selected. \n\t"
-                         "Select at least one of the supported output formats (-bed, -plot)")
+                         "Select at least one of the supported output formats (--bed, --plot)")
         sys.exit()
 
     if args.beta <= 0 or args.beta > 1:
