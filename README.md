@@ -117,7 +117,7 @@ WisecondorX predict test_input.npz reference_input.npz output_id [--optional arg
 <br>Optional argument &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Function  
 :--- | :---  
 `--minrefbins x` | Minimum amount of sensible reference bins per target bin (default: x=150)  
-`--maskrepeats x` | Regions with distances > mean + sd * 3 in the reference will be masked, number of masking cycles (default: x=4)  
+`--maskrepeats x` | Regions with distances > mean + sd * 3 in the reference will be masked, number of masking cycles (default: x=5)  
 `--alpha x` | P-value cut-off for calling a CBS breakpoint (default: x=1e-4)  
 `--beta x` | Number between 0 and 1, defines the linear trade-off between sensitivity and specificity for aberration calling. If beta=0, all segments will be called as aberrations. If beta=1, the cut-off (at copy number 1.5 and 2.5) is optimized to capture all constitutional aberrations (default: x=0.1)  
 `--blacklist x` | Blacklist that masks additional regions in output, requires header-less .bed file. This is particularly useful when the reference set is a too small to recognize some obvious regions (such as centromeres; example at `./blacklist/centromere.hg38.txt`) (default: x=None)  

@@ -46,6 +46,7 @@ suppressMessages(library("jsonlite"))
 
 input <- read_json(in.file)
 ratio <- as.numeric(unlist(input$results_r))
+weights <- as.numeric(unlist(input$weights))
 
 chrs = c(1:24)
 chrs = chrs[which(!(chrs  %in% exclude.chr))]
@@ -59,6 +60,7 @@ for (chr in chrs){
 # prepare for CBS
 
 ratio[ratio == 0] = NA
+weights[weights == 0] = 0.00001 # omit DNAcopy weirdness -- weight cannot be 0
 # Only segments will be further processed with this data.
 # Software will not account for 0's (these bins had no reference)
 
@@ -72,28 +74,14 @@ for (chr in chrs){
 for.cbs$chromosome <- chr.rep; for.cbs$x <- chr.rep.2
 for.cbs <- for.cbs[, c(2,3,1)] ; colnames(for.cbs)[3] <- "y"
 
-# Check for complete NA/chr
-
-remove.this <- c()
-for (chr in chrs){
-    check.this <- which(for.cbs$chromosome == chr)
-    if(all(is.na(for.cbs$y[check.this]))){
-        remove.this <- c(remove.this, check.this)
-    }
-}
-if (length(remove.this != 0)){
-    for.cbs <- for.cbs[-remove.this,]
-}
-
 # CBS
 
 CNA.object <- CNA(for.cbs$y, for.cbs$chromosome, for.cbs$x, data.type = "logratio", sampleid = "X")
 f = file()
 sink(file=f) ## silence output
-CNA.object <- invisible(segment(CNA.object, alpha = as.numeric(alpha), verbose=1)$output)
+CNA.object <- invisible(segment(CNA.object, alpha = as.numeric(alpha), verbose=1, weights=weights)$output)
 sink() ## undo silencing
 close(f)
 
 # Write output
-
 write_json(t(CNA.object), out.file)

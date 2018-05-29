@@ -2,7 +2,7 @@
 
 import argparse
 from scipy.stats import norm
-from wisecondorX.wisetools import *
+from wisetools import *
 
 
 def tool_convert(args):
@@ -194,8 +194,8 @@ def tool_test(args):
 
     # Reference data handling
     mask_list = []
+    weights = get_weights(reference_file["distances"])
     gender = reference_file['gender']
-
     binsize = reference_file['binsize'].item()
     indexes = reference_file['indexes']
     distances = reference_file['distances']
@@ -234,19 +234,25 @@ def tool_test(args):
     mask_list.append(infinite_mask)
     cleaned_r = results_r[infinite_mask]
     cleaned_z = results_z[infinite_mask]
+    cleaned_weights = weights[infinite_mask]
     cleaned_bin_sums = [np_sum(infinite_mask[:val]) for val in masked_chrom_bin_sums]
     cleaned_bins = [cleaned_bin_sums[i] - cleaned_bin_sums[i - 1] for i in range(1, len(cleaned_bin_sums))]
     cleaned_bins.insert(0, cleaned_bin_sums[0])
 
+
     results_z = []
     results_r = []
+    results_w = []
     inflated_z = inflate_array_multi(cleaned_z, mask_list)
     inflated_r = inflate_array_multi(cleaned_r, mask_list)
+    inflated_w = inflate_array_multi(cleaned_weights, mask_list)
     for chrom in xrange(len(chromosome_sizes)):
         chrom_data = inflated_z[sum(chromosome_sizes[:chrom]):sum(chromosome_sizes[:chrom + 1])]
         results_z.append(chrom_data)
         chrom_data = inflated_r[sum(chromosome_sizes[:chrom]):sum(chromosome_sizes[:chrom + 1])]
         results_r.append(chrom_data)
+        chrom_data = inflated_w[sum(chromosome_sizes[:chrom]):sum(chromosome_sizes[:chrom + 1])]
+        results_w.append(chrom_data)
 
     # log2
     for chrom in xrange(len(chromosome_sizes)):
@@ -254,27 +260,27 @@ def tool_test(args):
 
     # Apply blacklist
     if args.blacklist:
-        apply_blacklist(args, binsize, results_r, results_z, sample, gender)
+        apply_blacklist(args, binsize, results_r, results_z, results_w, sample, gender)
 
     # Make R interpretable
     results_r = [x.tolist() for x in results_r]
+    results_z = [x.tolist() for x in results_z]
+    results_w = [x.tolist() for x in results_w]
     nchrs = len(results_r)
     for c in range(nchrs):
         for i, rR in enumerate(results_r[c]):
             if not np.isfinite(rR):
-                results_r[c][i] = 0  # 0 -> result not found; translated to NA in R
-    results_z = [x.tolist() for x in results_z]
-    for c in range(nchrs):
-        for i, rR in enumerate(results_z[c]):
-            if not np.isfinite(rR):
-                results_z[c][i] = 0  # 0 -> result not found; translated to NA in R
+                results_r[c][i] = 0
+                results_z[c][i] = 0
+                results_w[c][i] = 0
 
     logging.info('Obtaining CBS segments ...')
-    cbs_calls = cbs(args, results_r, results_z, gender, wc_dir)
+    cbs_calls = cbs(args, results_r, results_z, results_w, gender, wc_dir)
 
     json_out = {'binsize': binsize,
                 'results_r': results_r,
                 'results_z': results_z,
+                'results_w' : results_w,
                 'threshold_z': z_threshold.tolist(),
                 'asdef': std_dev_avg.tolist(),
                 'aasdef': (std_dev_avg * z_threshold).tolist(),
@@ -284,7 +290,7 @@ def tool_test(args):
     # Save txt: optional
     if args.bed:
         logging.info('Writing tables ...')
-        generate_txt_output(args, binsize, json_out)
+        generate_txt_output(args, json_out)
 
     # Create plots: optional
     if args.plot:
@@ -401,7 +407,7 @@ def main():
                              help='Minimum amount of sensible reference bins per target bin.')
     parser_test.add_argument('--maskrepeats',
                              type=int,
-                             default=4,
+                             default=5,
                              help='Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.')
     parser_test.add_argument('--alpha',
                              type=float,

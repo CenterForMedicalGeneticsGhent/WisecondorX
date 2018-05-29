@@ -424,11 +424,20 @@ def repeat_test(test_data, indexes, distances, chromosome_bins,
         test_copy[np_abs(results_z) >= threshold] = -1
     return results_z, results_r, ref_sizes, std_dev_avg
 
-def generate_txt_output(args, binsize, json_out):
+
+def get_weights(distances):
+    inverse_weights = [np.mean(x) for x in distances]
+    weights = np.array([1/x for x in inverse_weights])
+    return weights
+
+
+def generate_txt_output(args, json_out):
     bed_file = open(args.outid + "_bins.bed", "w")
     bed_file.write("chr\tstart\tend\tid\tzscore\tratio\n")
     results_r = json_out["results_r"]
     results_z = json_out["results_z"]
+    results_w = json_out["results_w"]
+    binsize = json_out["binsize"]
     for chr_i in range(len(results_r)):
         chr = str(chr_i + 1)
         if chr == "23":
@@ -452,8 +461,8 @@ def generate_txt_output(args, binsize, json_out):
 
     segments_file = open(args.outid + "_segments.bed", "w")
     ab_file = open(args.outid + "_aberrations.bed", "w")
-    segments_file.write("chr\tstart\tend\tratio\n")
-    ab_file.write("chr\tstart\tend\tratio\ttype\n")
+    segments_file.write("chr\tstart\tend\tzscore\tratio\n")
+    ab_file.write("chr\tstart\tend\tzscore\tratio\ttype\n")
     segments = json_out["cbs_calls"]
     for segment in segments:
         chr = str(int(segment[0]))
@@ -461,7 +470,7 @@ def generate_txt_output(args, binsize, json_out):
             chr = "X"
         if chr == "24":
             chr = "Y"
-        it = [chr, int(segment[1] * binsize + 1), int((segment[2] + 1) * binsize), segment[4]]
+        it = [chr, int(segment[1] * binsize + 1), int((segment[2] + 1) * binsize), segment[3], segment[4]]
         it = [str(x) for x in it]
         segments_file.write("\t".join(it) + "\n")
         if float(segment[4]) > np.log2(1. + args.beta / 4):
@@ -472,7 +481,7 @@ def generate_txt_output(args, binsize, json_out):
     segments_file.close()
 
     statistics_file = open(args.outid + "_statistics.txt", "w")
-    statistics_file.write("chr ratio.mean ratio.median\n")
+    statistics_file.write("chr\tzscore\tratio.mean\tratio.median\n")
     chrom_scores = []
     for chr_i in range(len(results_r)):
         chr = str(chr_i + 1)
@@ -482,13 +491,20 @@ def generate_txt_output(args, binsize, json_out):
             chr = "Y"
         R = [x for x in results_r[chr_i] if x != 0]
 
+        stouffer = np.sum(np.array(results_z[chr_i]) * np.array(results_w[chr_i])) \
+                   / np.sqrt(np.sum(np.power(np.array(results_w[chr_i]), 2)))
+
         chrom_ratio_mean = np.mean(R)
         chrom_ratio_median = np.median(R)
 
-        statistics_file.write(str(chr) + " " + str(chrom_ratio_mean) + " " + str(chrom_ratio_median) + "\n")
+        statistics_file.write(str(chr)
+                              + "\t" + str(stouffer)
+                              + "\t" + str(chrom_ratio_median)
+                              + "\t" + str(chrom_ratio_mean)
+                              + "\n")
         chrom_scores.append(chrom_ratio_mean)
 
-    statistics_file.write("Standard deviation ratio.mean: " + str(np.std(chrom_scores)) + "\n")
+    statistics_file.write("Standard deviation mean chromosomal ratio: " + str(np.std(chrom_scores)) + "\n")
     statistics_file.write("Median within-segment binwise ratio variance: " + str(
         get_median_within_segment_variance(segments, results_r)) + "\n")
     statistics_file.close()
@@ -531,7 +547,7 @@ def get_median_within_segment_variance(segments, binratios):
     return np.median(vars)
 
 
-def apply_blacklist(args, binsize, results_r, results_z, sample, gender):
+def apply_blacklist(args, binsize, results_r, results_z, results_w, sample, gender):
     blacklist = {}
 
     for line in open(args.blacklist):
@@ -552,13 +568,14 @@ def apply_blacklist(args, binsize, results_r, results_z, sample, gender):
                     continue
                 results_r[int(chr) - 1][pos] = 0
                 results_z[int(chr) - 1][pos] = 0
+                results_w[int(chr) - 1][pos] = 0
                 sample[chr][pos] = 0
 
 
-def cbs(args, results_r, results_z, gender, wc_dir):
+def cbs(args, results_r, results_z, results_w, gender, wc_dir):
     json_cbs_temp_dir = os.path.abspath(args.outid + "_CBS_tmp")
     json_cbs_file = open(json_cbs_temp_dir + "_01.json", "w")
-    json.dump({"results_r": results_r}, json_cbs_file)
+    json.dump({"results_r": results_r, "weights": results_w}, json_cbs_file)
     json_cbs_file.close()
     cbs_script = str(os.path.dirname(wc_dir)) + "/include/CBS.R"
 
@@ -578,25 +595,22 @@ def cbs(args, results_r, results_z, gender, wc_dir):
     except subprocess.CalledProcessError as e:
         logging.critical("Script {} failed with error {}".format(cbs_script, e))
         sys.exit()
-
     os.remove(json_cbs_temp_dir + "_01.json")
     cbs_data = json.load(open(json_cbs_temp_dir + "_02.json"))[1:]
     cbs_data = [[float(y.encode("utf-8")) for y in x] for x in cbs_data]
     os.remove(json_cbs_temp_dir + "_02.json")
 
-    bm_scores = []
+    stouffer_scores = []
     for cbs_call_index in range(len(cbs_data[0])):
         chr_i = int(cbs_data[0][cbs_call_index]) - 1
         start = int(cbs_data[1][cbs_call_index]) - 1
         end = int(cbs_data[2][cbs_call_index])  # no - 1! (closed interval in python)
 
-        z_segment = results_z[chr_i][start:end]
-        z_segment = [x for x in z_segment if x != 0]
+        z_segment = np.array(results_z[chr_i][start:end])
+        w_segment = np.array(results_w[chr_i][start:end])
 
-        bm_score = np.mean(z_segment) * 2
-        if math.isnan(bm_score):
-            bm_score = 0.0
-        bm_scores.append(bm_score)
+        stouffer = np.sum(z_segment * w_segment) / np.sqrt(np.sum(np.power(w_segment,2)))
+        stouffer_scores.append(stouffer)
 
     # Save results
 
@@ -604,5 +618,5 @@ def cbs(args, results_r, results_z, gender, wc_dir):
     for cbs_call_index in range(len(cbs_data[0])):
         cbs_calls.append(
             [cbs_data[0][cbs_call_index], cbs_data[1][cbs_call_index] - 1, cbs_data[2][cbs_call_index] - 1,
-             bm_scores[cbs_call_index], cbs_data[4][cbs_call_index]])
+             stouffer_scores[cbs_call_index], cbs_data[4][cbs_call_index]])
     return cbs_calls
