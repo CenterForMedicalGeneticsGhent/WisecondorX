@@ -116,7 +116,7 @@ orange = "#cc8c0c"
 red = "#d10606"
 blue = "#3f60a0"
 
-png(paste0(out.dir, "/chromosomeWide.png"), width=14,height=10,units="in",res=512)
+png(paste0(out.dir, "/genome_wide.png"), width=14,height=10,units="in",res=512)
 
 l.matrix <- matrix(rep(1, 100), 10, 25, byrow = TRUE)
 for (i in 1:7){
