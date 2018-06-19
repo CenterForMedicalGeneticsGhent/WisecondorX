@@ -480,7 +480,7 @@ def generate_txt_output(args, json_out):
 
     segments_file.close()
 
-    statistics_file = open(args.outid + "_statistics.txt", "w")
+    statistics_file = open(args.outid + "_chr_statistics.txt", "w")
     statistics_file.write("chr\tzscore\tratio.mean\tratio.median\n")
     chrom_scores = []
     for chr_i in range(len(results_r)):
@@ -504,7 +504,8 @@ def generate_txt_output(args, json_out):
                               + "\n")
         chrom_scores.append(chrom_ratio_mean)
 
-    statistics_file.write("Standard deviation mean chromosomal ratio: " + str(np.std(chrom_scores)) + "\n")
+    statistics_file.write("Standard deviation mean chromosomal ratio: " +
+                          str(np.std([x for x in chrom_scores if not np.isnan(x)])) + "\n")
     statistics_file.write("Median within-segment binwise ratio variance: " + str(
         get_median_within_segment_variance(segments, results_r)) + "\n")
     statistics_file.close()
@@ -544,7 +545,7 @@ def get_median_within_segment_variance(segments, binratios):
         if [] != segment_ratios:
             var = np.var(segment_ratios)
             vars.append(var)
-    return np.median(vars)
+    return np.median([x for x in vars if not np.isnan(x)])
 
 
 def apply_blacklist(args, binsize, results_r, results_z, results_w, sample, gender):

@@ -74,12 +74,23 @@ for (chr in chrs){
 for.cbs$chromosome <- chr.rep; for.cbs$x <- chr.rep.2
 for.cbs <- for.cbs[, c(2,3,1)] ; colnames(for.cbs)[3] <- "y"
 
+# Check for complete NA/chr
+
+cbs.mask <- c()
+for (chr in chrs){
+    check <- which(for.cbs$chromosome == chr)
+    if(!(all(is.na(for.cbs$y[check])))){
+        cbs.mask <- c(cbs.mask, check)
+    }
+}
+for.cbs <- for.cbs[cbs.mask,]
+
 # CBS
 
 CNA.object <- CNA(for.cbs$y, for.cbs$chromosome, for.cbs$x, data.type = "logratio", sampleid = "X")
 f = file()
 sink(file=f) ## silence output
-CNA.object <- invisible(segment(CNA.object, alpha = as.numeric(alpha), verbose=1, weights=weights)$output)
+CNA.object <- invisible(segment(CNA.object, alpha = as.numeric(alpha), verbose=1, weights=weights[cbs.mask])$output)
 sink() ## undo silencing
 close(f)
 
