@@ -2,7 +2,7 @@
 
 import argparse
 from scipy.stats import norm
-from wisecondorX.wisetools import *
+from wisetools import *
 
 
 def tool_convert(args):
@@ -220,7 +220,7 @@ def tool_test(args):
 
     test_data = to_numpy_ref_format(sample, chromosome_sizes, mask, gender)
     test_data = apply_pca(test_data, pca_mean, pca_components)
-    autosome_cutoff, allosome_cutoff = get_optimal_cutoff(distances, chromosome_sizes, args.maskrepeats)
+    autosome_cutoff, allosome_cutoff = get_optimal_cutoff(distances, masked_sizes, args.maskrepeats)
 
     z_threshold = norm.ppf(0.975)  # two-tailed test
 
