@@ -433,7 +433,7 @@ def get_weights(distances):
 
 def generate_txt_output(args, json_out):
     bed_file = open(args.outid + "_bins.bed", "w")
-    bed_file.write("chr\tstart\tend\tid\tzscore\tratio\n")
+    bed_file.write("chr\tstart\tend\tid\tratio\tzscore\n")
     results_r = json_out["results_r"]
     results_z = json_out["results_z"]
     results_w = json_out["results_w"]
@@ -453,7 +453,7 @@ def generate_txt_output(args, json_out):
             if z == 0:
                 z = "NaN"
             feat_str = chr + ":" + str(feat) + "-" + str(feat + binsize - 1)
-            it = [chr, feat, feat + binsize - 1, feat_str, z, r]
+            it = [chr, feat, feat + binsize - 1, feat_str, r, z]
             it = [str(x) for x in it]
             bed_file.write("\t".join(it) + "\n")
             feat += binsize
@@ -461,8 +461,8 @@ def generate_txt_output(args, json_out):
 
     segments_file = open(args.outid + "_segments.bed", "w")
     ab_file = open(args.outid + "_aberrations.bed", "w")
-    segments_file.write("chr\tstart\tend\tzscore\tratio\n")
-    ab_file.write("chr\tstart\tend\tzscore\tratio\ttype\n")
+    segments_file.write("chr\tstart\tend\tratio\tzscore\n")
+    ab_file.write("chr\tstart\tend\tratio\tzscore\ttype\n")
     segments = json_out["cbs_calls"]
     for segment in segments:
         chr = str(int(segment[0]))
@@ -470,7 +470,7 @@ def generate_txt_output(args, json_out):
             chr = "X"
         if chr == "24":
             chr = "Y"
-        it = [chr, int(segment[1] * binsize + 1), int((segment[2] + 1) * binsize), segment[3], segment[4]]
+        it = [chr, int(segment[1] * binsize + 1), int((segment[2] + 1) * binsize), segment[4], segment[3]]
         it = [str(x) for x in it]
         segments_file.write("\t".join(it) + "\n")
         if float(segment[4]) > np.log2(1. + args.beta / 4):
@@ -481,7 +481,7 @@ def generate_txt_output(args, json_out):
     segments_file.close()
 
     statistics_file = open(args.outid + "_chr_statistics.txt", "w")
-    statistics_file.write("chr\tzscore\tratio.mean\tratio.median\n")
+    statistics_file.write("chr\tratio.mean\tratio.median\tzscore\n")
     chrom_scores = []
     for chr_i in range(len(results_r)):
         chr = str(chr_i + 1)
@@ -498,9 +498,9 @@ def generate_txt_output(args, json_out):
         chrom_ratio_median = np.median(R)
 
         statistics_file.write(str(chr)
-                              + "\t" + str(stouffer)
                               + "\t" + str(chrom_ratio_median)
                               + "\t" + str(chrom_ratio_mean)
+                              + "\t" + str(stouffer)
                               + "\n")
         chrom_scores.append(chrom_ratio_mean)
 
