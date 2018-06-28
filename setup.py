@@ -28,6 +28,7 @@ setup(
     entry_points={
         'console_scripts': ['WisecondorX = wisecondorX.main:main']
     },
+    scripts=['scripts/fix_convert_npz.py'],
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Console',
