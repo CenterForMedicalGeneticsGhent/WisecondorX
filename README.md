@@ -144,7 +144,7 @@ not least &mdash; restrictions on within-sample referencing, an important featur
 
 Some files might not be compatible between versions. A small script (`./additional/fix.convert.npz.py`) enables reformatting
 .npz files resulting from the `convert` stage to files that are compatible with the newest version. This can also be used
-to transform original WISECONDOR .npz files. Note that the `newref` function might require a re-run to make `predict` work
+to transform original WISECONDOR .npz files. Note that the `newref` function might require a re-run to make `predict` functional
 between versions.  
 
 ```bash
