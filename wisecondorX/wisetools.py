@@ -130,14 +130,13 @@ def convert_bam(bamfile, binsize, min_shift, threshold, mapq=1, demand_pair=Fals
 
 
 def get_gender(args, sample):
-
     tot_reads = float(sum([sum(sample[str(x)]) for x in range(1, 25)]))
     X_reads = float(sum(sample["23"]))
     X_len = float(len(sample["23"]))
     Y_reads = float(sum(sample["24"]))
     Y_len = float(len(sample["24"]))
 
-    X = (X_reads / tot_reads) / X_len * (1./args.gonmapr)
+    X = (X_reads / tot_reads) / X_len * (1. / args.gonmapr)
     Y = (Y_reads / tot_reads) / Y_len
 
     # X/Y               = ?
@@ -145,14 +144,13 @@ def get_gender(args, sample):
     # 2/noise (FEMALE)  = [4,8]
     # cut-off 3 -- should be robust vs noise, mosaic large subchromosomal duplication/deletions, and male pregnancies
 
-    if X/Y < 3:
+    if X / Y < 3:
         return "M"
     else:
         return "F"
 
 
 def gender_correct(sample, gender):
-
     if gender == "M":
         sample["23"] = sample["23"] * 2
         sample["24"] = sample["24"] * 2
@@ -161,7 +159,7 @@ def gender_correct(sample, gender):
 
 
 def append_objects_with_gonosomes(args, gender, sample, reference_file,
-                                  z_threshold,results_z, results_r,
+                                  z_threshold, results_z, results_r,
                                   ref_sizes, weights, mask, masked_sizes):
     cutoff = get_optimal_cutoff(reference_file['distances.' + gender], args.maskrepeats,
                                 sum(reference_file['masked_sizes.' + gender][:22]))
@@ -378,7 +376,7 @@ def get_reference(corrected_data, chromosome_bins, chromosome_bin_sums,
         if end_num < end:
             end = end_num
 
-        if len(chromosome_bin_sums) > 22 and chrom != 22 and chrom != 23: # chrom = index chrom
+        if len(chromosome_bin_sums) > 22 and chrom != 22 and chrom != 23:  # chrom = index chrom
             part_indexes = np.zeros((end - start, select_ref_amount), dtype=np.int32)
             part_distances = np.ones((end - start, select_ref_amount))
             big_indexes.extend(part_indexes)
@@ -388,11 +386,11 @@ def get_reference(corrected_data, chromosome_bins, chromosome_bin_sums,
         logging.info('Thread {} | Working on area {} {} | chr {}'.format(
             part, chromosome_bin_sums[chrom] - chromosome_bins[chrom], chromosome_bin_sums[chrom], str(chrom + 1)))
         chrom_data = np.concatenate((corrected_data[:chromosome_bin_sums[chrom] - chromosome_bins[chrom], :],
-                                    corrected_data[chromosome_bin_sums[chrom]:, :]))
+                                     corrected_data[chromosome_bin_sums[chrom]:, :]))
 
         # restrictions
         knit_length = 0
-        if len(chromosome_bin_sums) == 24: # male ref
+        if len(chromosome_bin_sums) == 24:  # male ref
             x_length = chromosome_bin_sums[22] - (chromosome_bin_sums[22] - chromosome_bins[22])
             y_length = chromosome_bin_sums[23] - (chromosome_bin_sums[23] - chromosome_bins[23])
             if chrom == 22:
@@ -452,15 +450,14 @@ def repeat_test(test_data, indexes, distances, chromosome_bins,
     test_copy = np.copy(test_data)
     for i in xrange(repeats):
         results_z, results_r, ref_sizes = try_sample(test_data, test_copy, indexes, distances,
-                                                    chromosome_bins, chromosome_bin_sums,
-                                                    cutoff)
+                                                     chromosome_bins, chromosome_bin_sums, cutoff)
         test_copy[np_abs(results_z) >= threshold] = -1
     return results_z, results_r, ref_sizes
 
 
 def get_weights(distances):
     inverse_weights = [np.mean(x) for x in distances]
-    weights = np.array([1/x for x in inverse_weights])
+    weights = np.array([1 / x for x in inverse_weights])
     return weights
 
 
@@ -479,11 +476,11 @@ def generate_txt_output(args, out_dict):
     binsize = out_dict["binsize"]
     actual_gender = out_dict["actual_gender"]
     for chr_i in range(len(results_r)):
-        chr = str(chr_i + 1)
-        if chr == "23":
-            chr = "X"
-        if chr == "24":
-            chr = "Y"
+        chrom = str(chr_i + 1)
+        if chrom == "23":
+            chrom = "X"
+        if chrom == "24":
+            chrom = "Y"
         feat = 1
         for feat_i in range(len(results_r[chr_i])):
             r = results_r[chr_i][feat_i]
@@ -492,8 +489,8 @@ def generate_txt_output(args, out_dict):
                 r = "NaN"
             if z == 0:
                 z = "NaN"
-            feat_str = chr + ":" + str(feat) + "-" + str(feat + binsize - 1)
-            it = [chr, feat, feat + binsize - 1, feat_str, r, z]
+            feat_str = chrom + ":" + str(feat) + "-" + str(feat + binsize - 1)
+            it = [chrom, feat, feat + binsize - 1, feat_str, r, z]
             it = [str(x) for x in it]
             bed_file.write("\t".join(it) + "\n")
             feat += binsize
@@ -505,16 +502,16 @@ def generate_txt_output(args, out_dict):
     ab_file.write("chr\tstart\tend\tratio\tzscore\ttype\n")
     segments = out_dict["cbs_calls"]
     for segment in segments:
-        chr = str(int(segment[0]))
-        if chr == "23":
-            chr = "X"
-        if chr == "24":
-            chr = "Y"
-        it = [chr, int(segment[1] * binsize + 1), int((segment[2] + 1) * binsize), segment[4], segment[3]]
+        chrom = str(int(segment[0]))
+        if chrom == "23":
+            chrom = "X"
+        if chrom == "24":
+            chrom = "Y"
+        it = [chrom, int(segment[1] * binsize + 1), int((segment[2] + 1) * binsize), segment[4], segment[3]]
         it = [str(x) for x in it]
         segments_file.write("\t".join(it) + "\n")
         ploidy = 2
-        if (chr == "X" or chr == "Y") and actual_gender == "M":
+        if (chrom == "X" or chrom == "Y") and actual_gender == "M":
             ploidy = 1
         if float(segment[4]) > get_aberration_cutoff(args.beta, ploidy)[1]:
             ab_file.write("\t".join(it) + "\tgain\n")
@@ -527,11 +524,11 @@ def generate_txt_output(args, out_dict):
     statistics_file.write("chr\tratio.mean\tratio.median\tzscore\n")
     chrom_scores = []
     for chr_i in range(len(results_r)):
-        chr = str(chr_i + 1)
-        if chr == "23":
-            chr = "X"
-        if chr == "24":
-            chr = "Y"
+        chrom = str(chr_i + 1)
+        if chrom == "23":
+            chrom = "X"
+        if chrom == "24":
+            chrom = "Y"
         R = [x for x in results_r[chr_i] if x != 0]
 
         stouffer = np.sum(np.array(results_z[chr_i]) * np.array(results_w[chr_i])) \
@@ -540,7 +537,7 @@ def generate_txt_output(args, out_dict):
         chrom_ratio_mean = np.mean(R)
         chrom_ratio_median = np.median(R)
 
-        statistics_file.write(str(chr)
+        statistics_file.write(str(chrom)
                               + "\t" + str(chrom_ratio_median)
                               + "\t" + str(chrom_ratio_mean)
                               + "\t" + str(stouffer)
@@ -581,7 +578,7 @@ def get_median_within_segment_variance(segments, binratios):
     for segment in segments:
         segment_ratios = binratios[int(segment[0]) - 1][int(segment[1]):int(segment[2])]
         segment_ratios = [x for x in segment_ratios if x != 0]
-        if [] != segment_ratios:
+        if segment_ratios:
             var = np.var(segment_ratios)
             vars.append(var)
     return np.median([x for x in vars if not np.isnan(x)])
@@ -597,18 +594,18 @@ def apply_blacklist(args, binsize, results_r, results_z, results_w):
             blacklist[bchr] = []
         blacklist[bchr].append([int(int(bstart) / binsize), int(int(bstop) / binsize) + 1])
 
-    for chr in blacklist.keys():
-        for s_s in blacklist[chr]:
-            if chr == "X":
-                chr = "23"
-            if chr == "Y":
-                chr = "24"
+    for chrom in blacklist.keys():
+        for s_s in blacklist[chrom]:
+            if chrom == "X":
+                chrom = "23"
+            if chrom == "Y":
+                chrom = "24"
             for pos in range(s_s[0], s_s[1]):
-                if len(results_r) < 24 and chr == "24":
+                if len(results_r) < 24 and chrom == "24":
                     continue
-                results_r[int(chr) - 1][pos] = 0
-                results_z[int(chr) - 1][pos] = 0
-                results_w[int(chr) - 1][pos] = 0
+                results_r[int(chrom) - 1][pos] = 0
+                results_z[int(chrom) - 1][pos] = 0
+                results_w[int(chrom) - 1][pos] = 0
 
 
 def cbs(args, results_r, results_z, results_w, reference_gender, wc_dir):
@@ -648,7 +645,7 @@ def cbs(args, results_r, results_z, results_w, reference_gender, wc_dir):
         z_segment = np.array(results_z[chr_i][start:end])
         w_segment = np.array(results_w[chr_i][start:end])
 
-        stouffer = np.sum(z_segment * w_segment) / np.sqrt(np.sum(np.power(w_segment,2)))
+        stouffer = np.sum(z_segment * w_segment) / np.sqrt(np.sum(np.power(w_segment, 2)))
         stouffer_scores.append(stouffer)
 
     # Save results

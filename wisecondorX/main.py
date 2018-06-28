@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import argparse
+
 from scipy.stats import norm
+
 from wisecondorX.wisetools import *
 
 
@@ -10,7 +12,7 @@ def tool_convert(args):
     logging.info('Importing data ...')
     logging.info('Converting bam ... This might take a while ...')
     sample, qual_info = convert_bam(args.infile, binsize=args.binsize,
-                                       min_shift=args.retdist, threshold=args.retthres)
+                                    min_shift=args.retdist, threshold=args.retthres)
     if args.gender:
         gender = args.gender
         logging.info('Gender {}'.format(gender))
@@ -103,7 +105,6 @@ def tool_newref(args):
 
 
 def tool_newref_main(args, cpus):
-
     # Use multiple cores if requested
     if cpus != 1:
         import concurrent.futures
@@ -131,7 +132,6 @@ def tool_newref_main(args, cpus):
 
 
 def tool_newref_prep(args, samples, genders, gender):
-
     if gender == "A":
         masked_data, chromosome_bins, mask = to_numpy_array(samples, range(1, 23))
     elif gender == "F":
@@ -215,7 +215,7 @@ def tool_newref_post(args, cpus):
 
 
 def tool_newref_merge(args, outfiles):
-    final_ref = {"has_female" : False, "has_male" : False}
+    final_ref = {"has_female": False, "has_male": False}
     for file_id in outfiles:
         npz_file = np.load(file_id)
         gender = str(npz_file['gender'])
@@ -255,12 +255,14 @@ def tool_test(args):
         sys.exit()
 
     if args.beta < 0.05:
-        logging.warning("Parameter beta seems to be a bit low. \n\t"
-                        "Have you read https://github.com/CenterForMedicalGeneticsGhent/wisecondorX#parameters on parameter optimization?")
+        logging.warning("Parameter beta seems to be a bit low. \n\t \
+                        Have you read https://github.com/CenterForMedicalGeneticsGhent/wisecondorX#parameters \
+                        on parameter optimization?")
 
     if args.alpha > 0.1:
-        logging.warning("Parameter alpha seems to be a bit high. \n\t"
-                        "Have you read https://github.com/CenterForMedicalGeneticsGhent/wisecondorX#parameters on parameter optimization?")
+        logging.warning("Parameter alpha seems to be a bit high. \n\t \
+                        Have you read https://github.com/CenterForMedicalGeneticsGhent/wisecondorX#parameters \
+                        on parameter optimization?")
 
     # Reference data handling
     mask_list = []
@@ -297,8 +299,8 @@ def tool_test(args):
     logging.info('Applying within-sample normalization autosomes...')
     test_copy = np.copy(test_data)
     results_z, results_r, ref_sizes = repeat_test(test_copy, indexes, distances,
-                                                masked_sizes, masked_chrom_bin_sums,
-                                                cutoff, z_threshold, 5)
+                                                  masked_sizes, masked_chrom_bin_sums,
+                                                  cutoff, z_threshold, 5)
 
     if not ref_has_male and actual_gender == "M":
         logging.warning('This sample is male, whilst the reference is created with fewer than 5 males. '
@@ -316,8 +318,8 @@ def tool_test(args):
 
     results_z, results_r, ref_sizes, weights, chromosome_sizes, mask, masked_sizes, masked_chrom_bin_sums = \
         append_objects_with_gonosomes(args, reference_gender, sample, reference_file,
-                                  z_threshold,results_z, results_r,
-                                  ref_sizes, weights, mask, masked_sizes)
+                                      z_threshold, results_z, results_r,
+                                      ref_sizes, weights, mask, masked_sizes)
     del reference_file
     mask_list.append(mask)
 
@@ -371,7 +373,7 @@ def tool_test(args):
     out_dict = {'binsize': binsize,
                 'results_r': results_r,
                 'results_z': results_z,
-                'results_w' : results_w,
+                'results_w': results_w,
                 'nreads': nreads,
                 'cbs_calls': cbs_calls,
                 'actual_gender': str(actual_gender),
@@ -445,11 +447,11 @@ def main():
 
     # Get gender
     parser_gender = subparsers.add_parser('gender',
-                                           description='Returns the gender of a .npz resulting from convert',
-                                           formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+                                          description='Returns the gender of a .npz resulting from convert',
+                                          formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_gender.add_argument('infile',
-                                type=str,
-                                help='.npz input file')
+                               type=str,
+                               help='.npz input file')
     parser_gender.set_defaults(func=output_gender)
 
     # New reference creation
