@@ -2,20 +2,8 @@
 # arg
 # -----
 
-arguments = "
-
---infile          - (mandatory argument) input .json file
---outfile         - (mandatory argument) output .json file
-
-"
-
 args <- commandArgs(TRUE)
-
-
-if (all(c(args[1], args[3]) %in% c("--infile", "--outfile"))){
-  in.file <- paste0(args[which(args == "--infile")+1])
-  out.file <- paste0(args[which(args == "--outfile")+1])
-}
+in.file <- paste0(args[which(args == "--infile")+1])
 
 # -----
 # lib
@@ -28,14 +16,15 @@ suppressMessages(library("jsonlite"))
 # main
 # -----
 
-# process data
+# load input
 
 input <- read_json(in.file)
 ratio <- as.numeric(unlist(input$results_r))
-weights <- as.numeric(unlist(input$weights))
-
-gender <- input$reference_gender
-alpha <- input$alpha
+weights <- as.numeric(unlist(input$results_w))
+gender <- input$ref_gender
+alpha <- as.numeric(input$alpha)
+binsize <- as.numeric(input$binsize)
+out.file <- as.character(input$outfile)
 
 if (gender == "M"){
     chrs = 1:24
@@ -43,19 +32,13 @@ if (gender == "M"){
     chrs = 1:23
 }
 
-bins.per.chr <- sapply(chrs, FUN = function(x) length(unlist(input$results_r[x])))
-chr.end.pos <- c(0)
-for (chr in chrs){
-  l = bins.per.chr[chr]
-  chr.end.pos <- c(chr.end.pos, l + chr.end.pos[length(chr.end.pos)])
-}
-
 # prepare for CBS
 
-ratio[ratio == 0] = NA
-weights[weights == 0] = 0.00001 # omit DNAcopy weirdness -- weight cannot be 0
-# Only segments will be further processed with this data.
-# Software will not account for 0's (these bins had no reference)
+bins.per.chr <- sapply(chrs, FUN = function(x) length(unlist(input$results_r[x])))
+chr.end.pos <- c(0,cumsum(bins.per.chr))
+
+ratio[ratio == 0] = NA # blacklist
+weights[weights == 0] = 1^-99 # omit DNAcopy weirdness -- weight cannot be NA or 0
 
 for.cbs <- as.data.frame(ratio)
 chr.rep <- c()
@@ -87,5 +70,59 @@ CNA.object <- invisible(segment(CNA.object, alpha = as.numeric(alpha), verbose=1
 sink() ## undo silencing
 close(f)
 
+CNA.object <- CNA.object[,-c(1,5)]
+colnames(CNA.object) <- c("chr", "s", "e", "r")
+
+# Check if segment covers large NA regions. If so = split
+
+new.CNA.object <- data.frame()
+
+for (row.i in 1:nrow(CNA.object)){
+  start.i = CNA.object$s[row.i]
+  end.i = CNA.object$e[row.i]
+  sub.frame = for.cbs[for.cbs$chromosome == CNA.object$chr[row.i], ]
+  segment = sub.frame$y[start.i:end.i]
+  
+  diff.na <- diff(is.na(segment), 1)
+  
+  start.pos <- which(diff.na == 1) + start.i - 1 # all consecutive NAs (start.pos)
+  end.pos <- which(diff.na == -1) + start.i - 1 # all consecutive NAs (end.pos)
+  
+  selection <- end.pos - start.pos > as.integer((binsize / 2000000) ** -1) # 100 kb -> 20 NA stretch: split
+  
+  start.pos <- start.pos[selection]
+  end.pos <- end.pos[selection]
+  
+  inverse.start.pos <- c(start.i, end.pos)
+  inverse.end.pos <- c(start.pos, end.i)
+  
+  selection <- inverse.end.pos - inverse.start.pos > 1 # segments should be at least two in length
+  if (length(which(selection)) == 0){
+      next
+  }
+  inverse.start.pos <- inverse.start.pos[selection]
+  inverse.end.pos <- inverse.end.pos[selection]
+  
+  sub.frame <- cbind(CNA.object$chr[row.i], inverse.start.pos, inverse.end.pos, CNA.object$r[row.i])
+  new.CNA.object <- rbind(new.CNA.object, sub.frame)
+  
+}
+
+colnames(new.CNA.object) <- c("chr", "s", "e", "r")
+CNA.object <- new.CNA.object
+
+# Recalculate segmental ratios
+
+for.cbs$w <- weights[cbs.mask]
+
+for (row.i in 1:nrow(CNA.object)){
+  sub.frame = for.cbs[for.cbs$chromosome == CNA.object$chr[row.i], ]
+  CNA.object$r[row.i] = weighted.mean(sub.frame$y[CNA.object$s[row.i]:CNA.object$e[row.i]],
+                                      sub.frame$w[CNA.object$s[row.i]:CNA.object$e[row.i]],
+                                      na.rm = T)
+}
+
+CNA.object$s <- CNA.object$s - 1 # Make python compliant
+
 # Write output
-write_json(t(CNA.object), out.file)
+write_json(CNA.object, out.file)

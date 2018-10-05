@@ -30,7 +30,7 @@ bins from non-informative ones.
 ### Installation
 
 Stable releases can be installed using [Conda](https://conda.io/docs/). This is the preferred option since
-Conda takes care of all necessary dependencies. Whilst doing this, make sure you are in a Python 2.7 environment.
+Conda takes care of all necessary dependencies. Whilst doing this, make sure you are in a Python 3.6 environment.
 ```bash
 
 conda install -f -c conda-forge -c bioconda wisecondorx
@@ -109,7 +109,7 @@ WisecondorX predict test_input.npz reference_input.npz output_id [--optional arg
 `--maskrepeats x` | Regions with distances > mean + sd * 3 in the reference will be masked, number of masking cycles (default: x=5)  
 `--alpha x` | P-value cut-off for calling a CBS breakpoint (default: x=1e-4)  
 `--beta x` | Number between 0 and 1, defines the linear trade-off between sensitivity and specificity for aberration calling. If beta=0, all segments will be called as aberrations. If beta=1, the cut-off (at copy number 1.5 and 2.5) is optimized to capture all constitutional aberrations (default: x=0.1)  
-`--blacklist x` | Blacklist that masks additional regions in output, requires header-less .bed file. This is particularly useful when the reference set is a too small to recognize some obvious regions (such as centromeres; example at `./blacklist/centromere.hg38.txt`) (default: x=None)  
+`--blacklist x` | Blacklist that masks additional regions in output, requires header-less .bed file. This is particularly useful when the reference set is a too small to recognize some obvious regions (such as centromeres; example at `./example.blacklist/centromere.hg38.txt`) (default: x=None)  
 `--bed` | Outputs tab-delimited .bed files (trisomy 21 NIPT example at `./example.bed`), containing all necessary information  **(\*)**
 `--plot` | Outputs custom .png plots (trisomy 21 NIPT example at `./example.plot`), directly interpretable  **(\*)**  
 
@@ -136,16 +136,13 @@ To understand the underlying algorithm, I highly recommend reading [Straver et a
 update shortly introduced in [Huijsdens-van Amsterdam et al (2018)](https://www.nature.com/articles/gim201832.epdf).
 Numerous adaptations to this algorithm have been made, yet the central principles remain. Changes include e.g. the inclusion of a gender
 prediction algorithm, gender handling prior to normalization (ultimately enabling X and Y predictions), extensive
-blacklisting options, inclusion of a weighted CBS algorithm, improved codes for output tables and plots, and &mdash; last but
-not least &mdash; restrictions on within-sample referencing, an important feature for NIPT:  
-
-![Alt text](./figures/within-sample-normalization-2.png?raw=true "Within-sample normalization in WisecondorX")
+blacklisting options, inclusion of a weighted CBS algorithm and improved codes for outputting tables and plots.
 
 # Additional scripts & features
 
-Some files might not be compatible between versions. A small script (`fix_convert_npz.py`) enables reformatting
+Some files might not be compatible between versions. A small script (`./additional.scripts/fix_convert_npz.py`) enables reformatting
 .npz files resulting from the `convert` stage to files that are compatible with the newest version. This can also be used
-to transform original WISECONDOR .npz files. Note that the `newref` function might require a re-run to make `predict` functional
+to transform original WISECONDOR .npz files. Note that the `newref` function requires a re-run to make `predict` functional
 between versions.  
 
 ```bash
@@ -159,22 +156,24 @@ To get the (predicted) gender of a sample, one can use `WisecondorX gender input
 
 ## Plots
 
-Every dot represents a bin. The dots range across the X-axis from chromosome 1 to X (or Y, in case of a male). The value 
-of a dot represents the ratio between the observed number of reads and the expected number of reads, the latter being 
-the 'healthy' state. As these values are log2-transformed, healthy dots should be close-to 0. Importantly, notice that 
+Every dot represents a bin. The dots range across the X-axis from chromosome 1 to X (or Y, in case of a male). The vertical 
+position of a dot represents the ratio between the observed number of reads and the expected number of reads, the latter being 
+the 'healthy' state. As these values are log2-transformed, 'healthy dots' should be close-to 0. Importantly, notice that 
 the dots are always subject to Gaussian noise. Therefore, segments, indicated by horizontal grey bars, cover bins of 
-predicted equal copy number. Vertical grey bars represent the blacklist, which will match hypervariable loci and repeats. 
-Finally, the vertical colored dotted lines show where the constitutional 1n and 3n states are expected (when constitutional
-DNA is at 100% purity, at least). Often, an aberration does not surpass these limits, which has several potential causes:
-depending on your type of analysis, the sample could be subject to tumor fraction, fetal fraction, mosaicisms, etc ...
-Sometimes, the segments do surpass these limits: here it's likely you are dealing with 4n, 5n, 6n, ...
+predicted equal copy number. The size of the dots represent the variability at the reference set. Thus, the size increases 
+with the certainty of an observation. The same goes for line width of the segments. 
+Vertical grey bars represent the blacklist, which will match hypervariable loci and repeats. Finally, the vertical colored
+dotted lines show where the constitutional 1n and 3n states are expected (when constitutional DNA is at 100% purity).
+Often, an aberration does not surpass these limits, which has several potential causes: depending on your type of analysis, 
+the sample could be subject to tumor fraction, fetal fraction, mosaicisms, etc ... Sometimes, the segments do surpass these 
+limits: here it's likely you are dealing with 4n, 5n, 6n, ...
 
 ## Tables
 
 ### sample_bins.bed
 
 This file contains all bin-wise information. When data is 'NaN', the corresponding bin is included in the blacklist. 
-The Z-scores are calculated using the within-sample reference bins.
+The Z-scores are calculated as default using the within-sample reference bins as a null set.
 
 ### sample_segments.bed
 
@@ -189,21 +188,19 @@ This file contains segments with a ratio surpassing a certain cutoff value, defi
 
 ### sample_chr_statistics.bed
 
-This file contains some interesting statistics for each chromosome. The definition of the Z-scores matches the one from
+This file contains some interesting statistics for each chromosome. The definition of the Z-scores matches the one from 
 the 'sample_segments.bed'. Might be interesting for NIPT.
 
 # Dependencies
 
 - R (v3.4) packages
     - jsonlite (v1.5)
-    - png (v0.1-7)
 - R Bioconductor (v3.5) packages
     - DNAcopy (v1.50.1)
-- Python (v2.7) libraries
-	- scipy (v1.0.0)
-    - scikit-learn (v0.19.1)
-    - pysam (v0.13)
-    - numpy (v1.13.3)
-    - futures (v3.2.0)
+- Python (v3.6) libraries
+	- scipy (v1.1.0)
+    - scikit-learn (v0.20.0)
+    - pysam (v0.15.1)
+    - numpy (v1.15.2)
 
 And of course, other versions are very likely to work as well.  
