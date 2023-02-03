@@ -9,36 +9,46 @@ from scipy.signal import argrelextrema
 from sklearn.decomposition import PCA
 from sklearn.mixture import GaussianMixture
 
-'''
+"""
 A Gaussian mixture model is fitted against
 all one-dimensional reference y-fractions.
 Two components are expected: one for males,
 and one for females. The local minimum will
 serve as the cut-off point.
-'''
+"""
 
 
 def train_gender_model(args, samples):
-    genders = np.empty(len(samples), dtype='object')
+    genders = np.empty(len(samples), dtype="object")
     y_fractions = []
     for sample in samples:
-        y_fractions.append(float(np.sum(sample['24'])) / float(np.sum([np.sum(sample[x]) for x in sample.keys()])))
+        y_fractions.append(
+            float(np.sum(sample["24"]))
+            / float(np.sum([np.sum(sample[x]) for x in sample.keys()]))
+        )
     y_fractions = np.array(y_fractions)
 
-    gmm = GaussianMixture(n_components=2, covariance_type='full', reg_covar=1e-99, max_iter=10000, tol=1e-99)
+    gmm = GaussianMixture(
+        n_components=2,
+        covariance_type="full",
+        reg_covar=1e-99,
+        max_iter=10000,
+        tol=1e-99,
+    )
     gmm.fit(X=y_fractions.reshape(-1, 1))
     gmm_x = np.linspace(0, 0.02, 5000)
     gmm_y = np.exp(gmm.score_samples(gmm_x.reshape(-1, 1)))
 
     if args.plotyfrac is not None:
         import matplotlib.pyplot as plt
+
         fig, ax = plt.subplots(figsize=(16, 6))
         ax.hist(y_fractions, bins=100, density=True)
-        ax.plot(gmm_x, gmm_y, 'r-', label='Gaussian mixture fit')
+        ax.plot(gmm_x, gmm_y, "r-", label="Gaussian mixture fit")
         ax.set_xlim([0, 0.02])
-        ax.legend(loc='best')
+        ax.legend(loc="best")
         plt.savefig(args.plotyfrac)
-        logging.info('Image written to {}, now quitting ...'.format(args.plotyfrac))
+        logging.info("Image written to {}, now quitting ...".format(args.plotyfrac))
         exit()
 
     if args.yfrac is not None:
@@ -50,18 +60,18 @@ def train_gender_model(args, samples):
         local_min_i = argrelextrema(sorted_gmm_y, np.less)
 
         cut_off = gmm_x[local_min_i][0]
-        logging.info('Determined --yfrac cutoff: {}'.format(str(round(cut_off, 4))))
+        logging.info("Determined --yfrac cutoff: {}".format(str(round(cut_off, 4))))
 
-    genders[y_fractions > cut_off] = 'M'
-    genders[y_fractions < cut_off] = 'F'
+    genders[y_fractions > cut_off] = "M"
+    genders[y_fractions < cut_off] = "F"
 
     return genders.tolist(), cut_off
 
 
-'''
+"""
 Finds mask (locations of bins without data) in the
 subset 'samples'.
-'''
+"""
 
 
 def get_mask(samples):
@@ -89,9 +99,9 @@ def get_mask(samples):
     return mask, bins_per_chr
 
 
-'''
+"""
 Normalizes samples for read depth and applies mask.
-'''
+"""
 
 
 def normalize_and_mask(samples, chrs, mask):
@@ -116,10 +126,10 @@ def normalize_and_mask(samples, chrs, mask):
     return masked_data
 
 
-'''
+"""
 Executes PCA. Rotations are saved which enable
 between sample normalization in the test phase.
-'''
+"""
 
 
 def train_pca(ref_data, pcacomp=5):
@@ -134,21 +144,30 @@ def train_pca(ref_data, pcacomp=5):
     return corrected.T, pca
 
 
-'''
+"""
 Calculates within-sample reference.
-'''
+"""
 
 
-def get_reference(pca_corrected_data, masked_bins_per_chr, masked_bins_per_chr_cum,
-                  ref_size, part, split_parts):
+def get_reference(
+    pca_corrected_data,
+    masked_bins_per_chr,
+    masked_bins_per_chr_cum,
+    ref_size,
+    part,
+    split_parts,
+):
     big_indexes = []
     big_distances = []
 
     bincount = masked_bins_per_chr_cum[-1]
 
     start_num, end_num = _get_part(part - 1, split_parts, bincount)
-    logging.info('Working on thread {} of {}, meaning bins {} up to {}'
-                 .format(part, split_parts, start_num, end_num))
+    logging.info(
+        "Working on thread {} of {}, meaning bins {} up to {}".format(
+            part, split_parts, start_num, end_num
+        )
+    )
     regions = _split_by_chr(start_num, end_num, masked_bins_per_chr_cum)
 
     for region in regions:
@@ -167,22 +186,33 @@ def get_reference(pca_corrected_data, masked_bins_per_chr, masked_bins_per_chr_c
             big_indexes.extend(part_indexes)
             big_distances.extend(part_distances)
             continue
-        chr_data = np.concatenate((pca_corrected_data[:masked_bins_per_chr_cum[chr] -
-                                                       masked_bins_per_chr[chr], :],
-                                   pca_corrected_data[masked_bins_per_chr_cum[chr]:, :]))
+        chr_data = np.concatenate(
+            (
+                pca_corrected_data[
+                    : masked_bins_per_chr_cum[chr] - masked_bins_per_chr[chr], :
+                ],
+                pca_corrected_data[masked_bins_per_chr_cum[chr] :, :],
+            )
+        )
 
-        part_indexes, part_distances = get_ref_for_bins(ref_size, start, end,
-                                                        pca_corrected_data, chr_data)
+        part_indexes, part_distances = get_ref_for_bins(
+            ref_size, start, end, pca_corrected_data, chr_data
+        )
 
         big_indexes.extend(part_indexes)
         big_distances.extend(part_distances)
 
     index_array = np.array(big_indexes)
     distance_array = np.array(big_distances)
-    null_ratio_array = np.zeros((len(distance_array), min(len(pca_corrected_data[0]), 100)))
+    null_ratio_array = np.zeros(
+        (len(distance_array), min(len(pca_corrected_data[0]), 100))
+    )
     samples = np.transpose(pca_corrected_data)
     for null_i, case_i in enumerate(
-            random.sample(range(len(pca_corrected_data[0])), min(len(pca_corrected_data[0]), 100))):
+        random.sample(
+            range(len(pca_corrected_data[0])), min(len(pca_corrected_data[0]), 100)
+        )
+    ):
         sample = samples[case_i]
         for bin_i in list(range(len(sample)))[start_num:end_num]:
             ref = sample[index_array[bin_i - start_num]]
@@ -214,9 +244,9 @@ def _get_part(partnum, outof, bincount):
     return start_bin, end_bin
 
 
-'''
+"""
 Calculates within-sample reference for a particular chromosome.
-'''
+"""
 
 
 def get_ref_for_bins(ref_size, start, end, pca_corrected_data, chr_data):
