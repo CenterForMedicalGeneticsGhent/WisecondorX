@@ -8,17 +8,17 @@ import warnings
 
 import numpy as np
 
-from wisecondorX.convert_tools import convert_reads
-from wisecondorX.newref_control import (
+from wisecondorx.convert_tools import convert_reads
+from wisecondorx.newref_control import (
     tool_newref_prep,
     tool_newref_main,
     tool_newref_merge,
 )
-from wisecondorX.newref_tools import train_gender_model, get_mask
-from wisecondorX.overall_tools import gender_correct, scale_sample
-from wisecondorX.predict_control import normalize, get_post_processed_result
-from wisecondorX.predict_output import generate_output_tables, exec_write_plots
-from wisecondorX.predict_tools import (
+from wisecondorx.newref_tools import train_gender_model, get_mask
+from wisecondorx.overall_tools import gender_correct, scale_sample
+from wisecondorx.predict_control import normalize, get_post_processed_result
+from wisecondorx.predict_output import generate_output_tables, exec_write_plots
+from wisecondorx.predict_tools import (
     log_trans,
     exec_cbs,
     apply_blacklist,

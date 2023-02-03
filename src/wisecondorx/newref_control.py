@@ -9,7 +9,7 @@ import time
 import numpy as np
 from concurrent import futures
 
-from wisecondorX.newref_tools import normalize_and_mask, train_pca, get_reference
+from wisecondorx.newref_tools import normalize_and_mask, train_pca, get_reference
 
 """
 Outputs preparation files of read depth normalized
