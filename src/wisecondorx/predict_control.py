@@ -1,6 +1,6 @@
 # WisecondorX
 
-from wisecondorX.predict_tools import (
+from wisecondorx.predict_tools import (
     coverage_normalize_and_mask,
     project_pc,
     get_optimal_cutoff,
