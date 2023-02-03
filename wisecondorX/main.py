@@ -395,67 +395,88 @@ def main():
     )
     parser_gender.set_defaults(func=output_gender)
 
-    parser_test = subparsers.add_parser('predict',
-                                        description='Find copy number aberrations',
-                                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_test.add_argument('infile',
-                             type=str,
-                             help='.npz input file')
-    parser_test.add_argument('reference',
-                             type=str,
-                             help='Reference .npz, as previously created with newref')
-    parser_test.add_argument('outid',
-                             type=str,
-                             help='Basename (w/o extension) of output files (paths are allowed, e.g. path/to/ID_1)')
-    parser_test.add_argument('--minrefbins',
-                             type=int,
-                             default=150,
-                             help='Minimum amount of sensible reference bins per target bin.')
-    parser_test.add_argument('--maskrepeats',
-                             type=int,
-                             default=5,
-                             help='Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.')
-    parser_test.add_argument('--alpha',
-                             type=float,
-                             default=1e-4,
-                             help='p-value cut-off for calling a CBS breakpoint.')
-    parser_test.add_argument('--zscore',
-                             type=float,
-                             default=5,
-                             help='z-score cut-off for aberration calling.')
-    parser_test.add_argument('--beta',
-                             type=float,
-                             default=None,
-                             help='When beta is given, --zscore is ignored and a ratio cut-off is used to call aberrations. Beta is a number between 0 (liberal) and 1 (conservative) and is optimally close to the purity.')
-    parser_test.add_argument('--blacklist',
-                             type=str,
-                             default=None,
-                             help='Blacklist that masks regions in output, structure of header-less '
-                                  'file: chr...(/t)startpos(/t)endpos(/n)')
-    parser_test.add_argument('--gender',
-                             type=str,
-                             choices=["F", "M"],
-                             help='Force WisecondorX to analyze this case as a male (M) or a female (F)')
-    parser_test.add_argument('--ylim',
-                             type=str,
-                             default='def',
-                             help='y-axis limits for plotting. e.g. [-2,2]')
-    parser_test.add_argument('--bed',
-                             action='store_true',
-                             help='Outputs tab-delimited .bed files, containing the most important information')
-    parser_test.add_argument('--plot',
-                             action='store_true',
-                             help='Outputs .png plots')
-    parser_test.add_argument('--cairo',
-                             action='store_true',
-                             help='Uses cairo bitmap type for plotting. Might be necessary for certain setups.')
-    parser_test.add_argument("--add-plot-title",
-                             action="store_true",
-                             help="Add the output name as plot title")
-    parser_test.add_argument('--seed',
-                             type=int,
-                             default=None,
-                             help='Seed for segmentation algorithm')
+    parser_test = subparsers.add_parser(
+        "predict",
+        description="Find copy number aberrations",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser_test.add_argument("infile", type=str, help=".npz input file")
+    parser_test.add_argument(
+        "reference", type=str, help="Reference .npz, as previously created with newref"
+    )
+    parser_test.add_argument(
+        "outid",
+        type=str,
+        help="Basename (w/o extension) of output files (paths are allowed, e.g. path/to/ID_1)",
+    )
+    parser_test.add_argument(
+        "--minrefbins",
+        type=int,
+        default=150,
+        help="Minimum amount of sensible reference bins per target bin.",
+    )
+    parser_test.add_argument(
+        "--maskrepeats",
+        type=int,
+        default=5,
+        help="Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.",
+    )
+    parser_test.add_argument(
+        "--alpha",
+        type=float,
+        default=1e-4,
+        help="p-value cut-off for calling a CBS breakpoint.",
+    )
+    parser_test.add_argument(
+        "--zscore",
+        type=float,
+        default=5,
+        help="z-score cut-off for aberration calling.",
+    )
+    parser_test.add_argument(
+        "--beta",
+        type=float,
+        default=None,
+        help="When beta is given, --zscore is ignored and a ratio cut-off is used to call aberrations. Beta is a number between 0 (liberal) and 1 (conservative) and is optimally close to the purity.",
+    )
+    parser_test.add_argument(
+        "--blacklist",
+        type=str,
+        default=None,
+        help="Blacklist that masks regions in output, structure of header-less "
+        "file: chr...(/t)startpos(/t)endpos(/n)",
+    )
+    parser_test.add_argument(
+        "--gender",
+        type=str,
+        choices=["F", "M"],
+        help="Force WisecondorX to analyze this case as a male (M) or a female (F)",
+    )
+    parser_test.add_argument(
+        "--ylim",
+        type=str,
+        default="def",
+        help="y-axis limits for plotting. e.g. [-2,2]",
+    )
+    parser_test.add_argument(
+        "--bed",
+        action="store_true",
+        help="Outputs tab-delimited .bed files, containing the most important information",
+    )
+    parser_test.add_argument("--plot", action="store_true", help="Outputs .png plots")
+    parser_test.add_argument(
+        "--cairo",
+        action="store_true",
+        help="Uses cairo bitmap type for plotting. Might be necessary for certain setups.",
+    )
+    parser_test.add_argument(
+        "--add-plot-title",
+        action="store_true",
+        help="Add the output name as plot title",
+    )
+    parser_test.add_argument(
+        "--seed", type=int, default=None, help="Seed for segmentation algorithm"
+    )
     parser_test.set_defaults(func=tool_test)
 
     args = parser.parse_args(sys.argv[1:])

@@ -243,15 +243,15 @@ def exec_cbs(rem_input, results):
     json_cbs_dir = os.path.abspath(rem_input["args"].outid + "_CBS_tmp")
 
     json_dict = {
-        'R_script': str('{}/include/CBS.R'.format(rem_input['wd'])),
-        'ref_gender': str(rem_input['ref_gender']),
-        'alpha': str(rem_input['args'].alpha),
-        'binsize': str(rem_input['binsize']),
-        'seed': str(rem_input['args'].seed),
-        'results_r': results['results_r'],
-        'results_w': results['results_w'],
-        'infile': str('{}_01.json'.format(json_cbs_dir)),
-        'outfile': str('{}_02.json'.format(json_cbs_dir))
+        "R_script": str("{}/include/CBS.R".format(rem_input["wd"])),
+        "ref_gender": str(rem_input["ref_gender"]),
+        "alpha": str(rem_input["args"].alpha),
+        "binsize": str(rem_input["binsize"]),
+        "seed": str(rem_input["args"].seed),
+        "results_r": results["results_r"],
+        "results_w": results["results_w"],
+        "infile": str("{}_01.json".format(json_cbs_dir)),
+        "outfile": str("{}_02.json".format(json_cbs_dir)),
     }
 
     results_c = _get_processed_cbs(exec_R(json_dict))
