@@ -21,6 +21,7 @@ suppressMessages(library("jsonlite"))
 input <- read_json(in.file)
 ratio <- as.numeric(unlist(input$results_r))
 weights <- as.numeric(unlist(input$results_w))
+seed <- as.numeric(input$seed)
 gender <- input$ref_gender
 alpha <- as.numeric(input$alpha)
 binsize <- as.numeric(input$binsize)
@@ -63,6 +64,9 @@ for.cbs <- for.cbs[cbs.mask,]
 
 # CBS
 
+if (is.na(seed) || seed == '') {
+  set.seed(seed)
+}
 CNA.object <- CNA(for.cbs$y, for.cbs$chromosome, for.cbs$x, data.type = "logratio", sampleid = "X")
 f = file()
 sink(file=f) ## silence output
