@@ -247,6 +247,7 @@ def exec_cbs(rem_input, results):
         "ref_gender": str(rem_input["ref_gender"]),
         "alpha": str(rem_input["args"].alpha),
         "binsize": str(rem_input["binsize"]),
+        "seed": str(rem_input["args"].seed),
         "results_r": results["results_r"],
         "results_w": results["results_w"],
         "infile": str("{}_01.json".format(json_cbs_dir)),
