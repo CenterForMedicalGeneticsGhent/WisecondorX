@@ -399,6 +399,10 @@ def main():
     parser_test.add_argument("--add-plot-title",
                              action="store_true",
                              help="Add the output name as plot title")
+    parser_test.add_argument('--seed',
+                             type=int,
+                             default=None,
+                             help='Seed for segmentation algorithm')
     parser_test.set_defaults(func=tool_test)
 
     args = parser.parse_args(sys.argv[1:])
