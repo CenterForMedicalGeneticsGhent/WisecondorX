@@ -43,11 +43,11 @@ writes tables.
 '''
 
 
-def generate_output_tables(rem_input, results):
-    _generate_bins_bed(rem_input, results)
-    _generate_segments_and_aberrations_bed(rem_input, results)
-    _generate_chr_statistics_file(rem_input, results)
-
+def generate_output_tables(rem_input, results, bed, vcf):
+    if bed:
+        _generate_bins_bed(rem_input, results)
+        _generate_chr_statistics_file(rem_input, results)
+    _generate_segments_and_aberrations(rem_input, results, bed, vcf)
 
 def _generate_bins_bed(rem_input, results):
     bins_file = open('{}_bins.bed'.format(rem_input['args'].outid), 'w')
@@ -77,11 +77,18 @@ def _generate_bins_bed(rem_input, results):
     bins_file.close()
 
 
-def _generate_segments_and_aberrations_bed(rem_input, results):
-    segments_file = open('{}_segments.bed'.format(rem_input['args'].outid), 'w')
-    abberations_file = open('{}_aberrations.bed'.format(rem_input['args'].outid), 'w')
-    segments_file.write('chr\tstart\tend\tratio\tzscore\n')
-    abberations_file.write('chr\tstart\tend\tratio\tzscore\ttype\n')
+def _generate_segments_and_aberrations(rem_input, results, bed, vcf):
+    if bed:
+        segments_file = open('{}_segments.bed'.format(rem_input['args'].outid), 'w')
+        abberations_file = open('{}_aberrations.bed'.format(rem_input['args'].outid), 'w')
+        segments_file.write('chr\tstart\tend\tratio\tzscore\n')
+        abberations_file.write('chr\tstart\tend\tratio\tzscore\ttype\n')
+
+    if vcf:
+        pass
+        # 1. Find a way to write the contigs in the header
+        # 3. Find a way to genotype the variants (https://support.illumina.com/content/dam/illumina-support/help/Illumina_DRAGEN_Bio_IT_Platform_v3_7_1000000141465/Content/SW/Informatics/Dragen/CNVVCFFile_fDG_dtSW.htm)
+        # 2. Find a way to write to the VCF
 
     for segment in results['results_c']:
         chr_name = str(segment[0] + 1)
@@ -95,25 +102,33 @@ def _generate_segments_and_aberrations_bed(rem_input, results):
                segment[4], segment[3]]
         segments_file.write('{}\n'.format('\t'.join([str(x) for x in row])))
 
-        ploidy = 2
-        if (chr_name == 'X' or chr_name == 'Y') and rem_input['ref_gender'] == 'M':
-            ploidy = 1
-        if rem_input['args'].beta is not None:
-            if float(segment[4]) > __get_aberration_cutoff(rem_input['args'].beta, ploidy)[1]:
-                abberations_file.write('{}\tgain\n'.format('\t'.join([str(x) for x in row])))
-            elif float(segment[4]) < __get_aberration_cutoff(rem_input['args'].beta, ploidy)[0]:
-                abberations_file.write('{}\tloss\n'.format('\t'.join([str(x) for x in row])))
-        elif isinstance(segment[3], str):
-            continue
-        else:
-            if float(segment[3]) > rem_input['args'].zscore:
-                abberations_file.write('{}\tgain\n'.format('\t'.join([str(x) for x in row])))
-            elif float(segment[3]) < - rem_input['args'].zscore:
-                abberations_file.write('{}\tloss\n'.format('\t'.join([str(x) for x in row])))
+        
+        gain_or_loss = __define_gain_loss(segment, rem_input, chr_name)
+        if not gain_or_loss: continue
+        abberations_file.write('{}\t{}\n'.format('\t'.join([str(x) for x in row]), gain_or_loss))
 
     segments_file.close()
     abberations_file.close()
 
+def __define_gain_loss(segment, rem_input, chr_name, ploidy = 2):
+    """
+    Define if the abberation is a gain or a loss
+    """
+    if (chr_name == 'X' or chr_name == 'Y') and rem_input['ref_gender'] == 'M':
+        ploidy = 1
+    if rem_input['args'].beta is not None:
+        abberation_cutoff = __get_aberration_cutoff(rem_input['args'].beta, ploidy)
+        if float(segment[4]) > abberation_cutoff[1]:
+            return "gain"
+        elif float(segment[4]) < abberation_cutoff[0]:
+            return "loss"
+    elif isinstance(segment[3], str): return False
+    else:
+        if float(segment[3]) > rem_input['args'].zscore:
+            return "gain"
+        elif float(segment[3]) < - rem_input['args'].zscore:
+            return "loss"
+    return False
 
 def __get_aberration_cutoff(beta, ploidy):
     loss_cutoff = np.log2((ploidy - (beta / 2)) / ploidy)

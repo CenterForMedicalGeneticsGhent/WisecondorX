@@ -239,9 +239,9 @@ def tool_test(args):
 
     results['results_c'] = exec_cbs(rem_input, results)
 
-    if args.bed:
+    if args.bed or args.vcf:
         logging.info('Writing tables ...')
-        generate_output_tables(rem_input, results)
+        generate_output_tables(rem_input, results, args.bed, args.vcf)
 
     if args.plot:
         logging.info('Writing plots ...')
@@ -390,6 +390,9 @@ def main():
     parser_test.add_argument('--bed',
                              action='store_true',
                              help='Outputs tab-delimited .bed files, containing the most important information')
+    parser_test.add_argument('--vcf',
+                             action='store_true',
+                             help='Outputs the found CNVs in a .vcf file')
     parser_test.add_argument('--plot',
                              action='store_true',
                              help='Outputs .png plots')
