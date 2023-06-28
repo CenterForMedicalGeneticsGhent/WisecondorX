@@ -47,7 +47,7 @@ writes tables.
 def generate_output_tables(rem_input, results):
     if rem_input['args'].bed:
         _generate_bins_bed(rem_input, results)
-        _generate_chr_statistics_file(rem_input, results)
+    _generate_chr_statistics_file(rem_input, results)
     _generate_segments_and_aberrations(rem_input, results)
 
 def _generate_bins_bed(rem_input, results):
@@ -87,8 +87,8 @@ def _generate_segments_and_aberrations(rem_input, results):
 
     if rem_input['args'].vcf:
         vcf_file = VariantFile("{}.vcf.gz".format(rem_input['args'].outid), "w")
-        prefix = __add_contigs(rem_input['args'].fai, vcf_file)
-        __add_info(vcf_file)
+        prefix = _add_contigs(rem_input['args'].fai, vcf_file)
+        _add_info(vcf_file)
         sample = rem_input['args'].sample if rem_input['args'].sample else rem_input['args'].outid.split("/")[-1]
         vcf_file.header.add_sample(sample)
         # 1. Find a way to genotype the variants (https://support.illumina.com/content/dam/illumina-support/help/Illumina_DRAGEN_Bio_IT_Platform_v3_7_1000000141465/Content/SW/Informatics/Dragen/CNVVCFFile_fDG_dtSW.htm)
@@ -154,7 +154,7 @@ def _generate_segments_and_aberrations(rem_input, results):
     if rem_input['args'].vcf:
         vcf_file.close()
 
-def __add_contigs(fai:str, vcf:VariantFile) -> str:
+def _add_contigs(fai:str, vcf:VariantFile) -> str:
 
     prefix = ""
     with open(fai, "r") as index:
@@ -165,7 +165,7 @@ def __add_contigs(fai:str, vcf:VariantFile) -> str:
 
     return prefix
 
-def __add_info(vcf:VariantFile) -> None:
+def _add_info(vcf:VariantFile) -> None:
     infos = [
         '##ALT=<ID=CNV,Description="Copy number variant region">',
         '##ALT=<ID=DEL,Description="Deletion relative to the reference">',
