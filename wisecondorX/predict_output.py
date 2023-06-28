@@ -91,8 +91,6 @@ def _generate_segments_and_aberrations(rem_input, results):
         _add_info(vcf_file)
         sample = rem_input['args'].sample if rem_input['args'].sample else rem_input['args'].outid.split("/")[-1]
         vcf_file.header.add_sample(sample)
-        # 1. Find a way to genotype the variants (https://support.illumina.com/content/dam/illumina-support/help/Illumina_DRAGEN_Bio_IT_Platform_v3_7_1000000141465/Content/SW/Informatics/Dragen/CNVVCFFile_fDG_dtSW.htm)
-        # 2. Find a way to write to the VCF
 
     dup_count = 0
     del_count = 0
@@ -115,7 +113,7 @@ def _generate_segments_and_aberrations(rem_input, results):
         if (chr_name == 'X' or chr_name == 'Y') and rem_input['ref_gender'] == 'M':
             ploidy = 1
 
-        gain_or_loss = __define_gain_loss(segment, rem_input, chr_name, ploidy)
+        gain_or_loss = _define_gain_loss(segment, rem_input, ploidy)
         if not gain_or_loss: continue
         if rem_input['args'].bed:
             abberations_file.write('{}\t{}\n'.format('\t'.join([str(x) for x in row]), gain_or_loss))
@@ -130,7 +128,6 @@ def _generate_segments_and_aberrations(rem_input, results):
                 del_count += 1
                 type_count = del_count
 
-            # TODO find a way to fill in QUAL and FILTER
             record: VariantRecord = vcf_file.new_record(
                 contig=prefix + chr_name, 
                 id="WisecondorX_{}_{}".format(cnv_type, type_count),
@@ -155,7 +152,9 @@ def _generate_segments_and_aberrations(rem_input, results):
         vcf_file.close()
 
 def _add_contigs(fai:str, vcf:VariantFile) -> str:
-
+    """
+    Adds the contigs to the VCF file
+    """
     prefix = ""
     with open(fai, "r") as index:
         for line in index.readlines():
@@ -166,6 +165,9 @@ def _add_contigs(fai:str, vcf:VariantFile) -> str:
     return prefix
 
 def _add_info(vcf:VariantFile) -> None:
+    """
+    Adds the INFO fields to the VCF file
+    """
     infos = [
         '##ALT=<ID=CNV,Description="Copy number variant region">',
         '##ALT=<ID=DEL,Description="Deletion relative to the reference">',
@@ -182,7 +184,7 @@ def _add_info(vcf:VariantFile) -> None:
     for info in infos:
         vcf.header.add_line(info)
 
-def __define_gain_loss(segment, rem_input, chr_name, ploidy = 2):
+def _define_gain_loss(segment, rem_input, ploidy = 2):
     """
     Define if the abberation is a gain or a loss
     """
