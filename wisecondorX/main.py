@@ -121,9 +121,14 @@ def tool_newref(args):
 def tool_test(args):
     logging.info('Starting CNA prediction')
 
-    if not args.bed and not args.plot:
+    if not args.bed and not args.plot and not args.vcf:
         logging.critical('No output format selected. '
-                         'Select at least one of the supported output formats (--bed, --plot)')
+                         'Select at least one of the supported output formats (--bed, --plot, --vcf)')
+        sys.exit()
+
+    if args.vcf and not args.fai:
+        logging.critical('A fasta index file is needed to create a VCF file. '
+                         'Please provide one via the --fai flag')
         sys.exit()
 
     if args.zscore <= 0:
@@ -239,8 +244,11 @@ def tool_test(args):
 
     results['results_c'] = exec_cbs(rem_input, results)
 
-    if args.bed:
-        logging.info('Writing tables ...')
+    if args.bed or args.vcf:
+        types = []
+        if args.bed: types.append("tables")
+        if args.vcf: types.append("VCF")
+        logging.info("Writing {} ...".format("/".join(types)))
         generate_output_tables(rem_input, results)
 
     if args.plot:
@@ -390,6 +398,15 @@ def main():
     parser_test.add_argument('--bed',
                              action='store_true',
                              help='Outputs tab-delimited .bed files, containing the most important information')
+    parser_test.add_argument('--vcf',
+                             action='store_true',
+                             help='Outputs the found CNVs in a .vcf file')
+    parser_test.add_argument('--fai',
+                             type=str,
+                             help='The index of the reference used to align the input files. (Only needed for VCF creation)')
+    parser_test.add_argument('--sample',
+                             type=str,
+                             help='The sample name to use in the VCF. Defaults to the basename of the out ID.')
     parser_test.add_argument('--plot',
                              action='store_true',
                              help='Outputs .png plots')
