@@ -94,6 +94,7 @@ def _generate_segments_and_aberrations(rem_input, results):
 
     dup_count = 0
     del_count = 0
+    cnv_count = 0
 
     for segment in results['results_c']:
         chr_name = str(segment[0] + 1)
@@ -109,14 +110,13 @@ def _generate_segments_and_aberrations(rem_input, results):
             row = [chr_name, start, stop, ratio, zscore]          
             segments_file.write('{}\n'.format('\t'.join([str(x) for x in row])))
 
+        # output segments instead of abberations but add field that annotates which variant it is
+
         ploidy = 2
         if (chr_name == 'X' or chr_name == 'Y') and rem_input['ref_gender'] == 'M':
             ploidy = 1
 
         gain_or_loss = _define_gain_loss(segment, rem_input, ploidy)
-        if not gain_or_loss: continue
-        if rem_input['args'].bed:
-            abberations_file.write('{}\t{}\n'.format('\t'.join([str(x) for x in row]), gain_or_loss))
 
         if rem_input['args'].vcf:
             if gain_or_loss == "gain":
@@ -127,6 +127,10 @@ def _generate_segments_and_aberrations(rem_input, results):
                 cnv_type = "DEL"
                 del_count += 1
                 type_count = del_count
+            else:
+                cnv_type = "CNV"
+                cnv_count += 1
+                type_count = cnv_count
 
             record: VariantRecord = vcf_file.new_record(
                 contig=prefix + chr_name, 
@@ -137,12 +141,17 @@ def _generate_segments_and_aberrations(rem_input, results):
             )
             record.info.update({
                 'SVTYPE': 'CNV',
-                'SVLEN': record.stop - record.start + 1
+                'SVLEN': record.stop - record.start + 1,
+                'ABB': False if not gain_or_loss else True,
+                'SM': ratio,
+                'ZS': zscore
             })
             record.samples[sample]['GT'] = (None,None) if ploidy == 2 else None
-            record.samples[sample]['SM'] = ratio
-            record.samples[sample]['ZS'] = zscore
             vcf_file.write(record)
+
+        if not gain_or_loss: continue
+        if rem_input['args'].bed:
+            abberations_file.write('{}\t{}\n'.format('\t'.join([str(x) for x in row]), gain_or_loss))
 
     if rem_input['args'].bed:
         segments_file.close()
@@ -175,11 +184,12 @@ def _add_info(vcf:VariantFile) -> None:
         '##INFO=<ID=SVLEN,Number=.,Type=Integer,Description="Difference in length between REF and ALT alleles">',
         '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">',
         '##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">',
+        '##INFO=<ID=SM,Number=1,Type=Float,Description="Linear copy ratio of the segment mean">',
+        '##INFO=<ID=ZS,Number=1,Type=Float,Description="The z-score calculated for the current CNV">',
+        '##INFO=<ID=ABB,Number=0,Type=Flag,Description="States that the CNV is an abberation">',
         '##FILTER=<ID=cnvQual,Description="CNV with quality below 10">',
         '##FILTER=<ID=cnvCopyRatio,Description="CNV with copy ratio within +/- 0.2 of 1.0">',
         '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
-        '##FORMAT=<ID=SM,Number=1,Type=Float,Description="Linear copy ratio of the segment mean">',
-        '##FORMAT=<ID=ZS,Number=1,Type=Float,Description="The z-score calculated for the current CNV">',
     ]
     for info in infos:
         vcf.header.add_line(info)
@@ -189,7 +199,7 @@ def _define_gain_loss(segment, rem_input, ploidy = 2):
     Define if the abberation is a gain or a loss
     """
     if rem_input['args'].beta is not None:
-        abberation_cutoff = __get_aberration_cutoff(rem_input['args'].beta, ploidy)
+        abberation_cutoff = _get_aberration_cutoff(rem_input['args'].beta, ploidy)
         if float(segment[4]) > abberation_cutoff[1]:
             return "gain"
         elif float(segment[4]) < abberation_cutoff[0]:
@@ -202,7 +212,7 @@ def _define_gain_loss(segment, rem_input, ploidy = 2):
             return "loss"
     return False
 
-def __get_aberration_cutoff(beta, ploidy):
+def _get_aberration_cutoff(beta, ploidy):
     loss_cutoff = np.log2((ploidy - (beta / 2)) / ploidy)
     gain_cutoff = np.log2((ploidy + (beta / 2)) / ploidy)
     return loss_cutoff, gain_cutoff
