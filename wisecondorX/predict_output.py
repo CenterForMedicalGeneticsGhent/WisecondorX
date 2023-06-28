@@ -5,6 +5,7 @@ import os
 import numpy as np
 
 from wisecondorX.overall_tools import exec_R, get_z_score, get_median_segment_variance, get_cpa
+from pysam import VariantFile, VariantRecord
 
 '''
 Writes plots.
@@ -43,11 +44,11 @@ writes tables.
 '''
 
 
-def generate_output_tables(rem_input, results, bed, vcf):
-    if bed:
+def generate_output_tables(rem_input, results):
+    if rem_input['args'].bed:
         _generate_bins_bed(rem_input, results)
         _generate_chr_statistics_file(rem_input, results)
-    _generate_segments_and_aberrations(rem_input, results, bed, vcf)
+    _generate_segments_and_aberrations(rem_input, results)
 
 def _generate_bins_bed(rem_input, results):
     bins_file = open('{}_bins.bed'.format(rem_input['args'].outid), 'w')
@@ -77,18 +78,24 @@ def _generate_bins_bed(rem_input, results):
     bins_file.close()
 
 
-def _generate_segments_and_aberrations(rem_input, results, bed, vcf):
-    if bed:
+def _generate_segments_and_aberrations(rem_input, results):
+    if rem_input['args'].bed:
         segments_file = open('{}_segments.bed'.format(rem_input['args'].outid), 'w')
         abberations_file = open('{}_aberrations.bed'.format(rem_input['args'].outid), 'w')
         segments_file.write('chr\tstart\tend\tratio\tzscore\n')
         abberations_file.write('chr\tstart\tend\tratio\tzscore\ttype\n')
 
-    if vcf:
-        pass
-        # 1. Find a way to write the contigs in the header
-        # 3. Find a way to genotype the variants (https://support.illumina.com/content/dam/illumina-support/help/Illumina_DRAGEN_Bio_IT_Platform_v3_7_1000000141465/Content/SW/Informatics/Dragen/CNVVCFFile_fDG_dtSW.htm)
+    if rem_input['args'].vcf:
+        vcf_file = VariantFile("{}.vcf.gz".format(rem_input['args'].outid), "w")
+        prefix = __add_contigs(rem_input['args'].fai, vcf_file)
+        __add_info(vcf_file)
+        sample = rem_input['args'].sample if rem_input['args'].sample else rem_input['args'].outid.split("/")[-1]
+        vcf_file.header.add_sample(sample)
+        # 1. Find a way to genotype the variants (https://support.illumina.com/content/dam/illumina-support/help/Illumina_DRAGEN_Bio_IT_Platform_v3_7_1000000141465/Content/SW/Informatics/Dragen/CNVVCFFile_fDG_dtSW.htm)
         # 2. Find a way to write to the VCF
+
+    dup_count = 0
+    del_count = 0
 
     for segment in results['results_c']:
         chr_name = str(segment[0] + 1)
@@ -96,26 +103,89 @@ def _generate_segments_and_aberrations(rem_input, results, bed, vcf):
             chr_name = 'X'
         if chr_name == '24':
             chr_name = 'Y'
-        row = [chr_name,
-               int(segment[1] * rem_input['binsize'] + 1),
-               int(segment[2] * rem_input['binsize']),
-               segment[4], segment[3]]
-        segments_file.write('{}\n'.format('\t'.join([str(x) for x in row])))
+        start = int(segment[1] * rem_input['binsize'] + 1)
+        stop = int(segment[2] * rem_input['binsize'])
+        ratio = segment[4]
+        zscore = segment[3]
+        if rem_input['args'].bed: 
+            row = [chr_name, start, stop, ratio, zscore]          
+            segments_file.write('{}\n'.format('\t'.join([str(x) for x in row])))
 
-        
-        gain_or_loss = __define_gain_loss(segment, rem_input, chr_name)
+        ploidy = 2
+        if (chr_name == 'X' or chr_name == 'Y') and rem_input['ref_gender'] == 'M':
+            ploidy = 1
+
+        gain_or_loss = __define_gain_loss(segment, rem_input, chr_name, ploidy)
         if not gain_or_loss: continue
-        abberations_file.write('{}\t{}\n'.format('\t'.join([str(x) for x in row]), gain_or_loss))
+        if rem_input['args'].bed:
+            abberations_file.write('{}\t{}\n'.format('\t'.join([str(x) for x in row]), gain_or_loss))
 
-    segments_file.close()
-    abberations_file.close()
+        if rem_input['args'].vcf:
+            if gain_or_loss == "gain":
+                cnv_type = "DUP"
+                dup_count += 1
+                type_count = dup_count
+            elif gain_or_loss == "loss":
+                cnv_type = "DEL"
+                del_count += 1
+                type_count = del_count
+
+            # TODO find a way to fill in QUAL and FILTER
+            record: VariantRecord = vcf_file.new_record(
+                contig=prefix + chr_name, 
+                id="WisecondorX_{}_{}".format(cnv_type, type_count),
+                start=start,
+                stop=stop,
+                alleles=('N', "<{}>".format(cnv_type))
+            )
+            record.info.update({
+                'SVTYPE': 'CNV',
+                'SVLEN': record.stop - record.start + 1
+            })
+            record.samples[sample]['GT'] = (None,None) if ploidy == 2 else None
+            record.samples[sample]['SM'] = ratio
+            record.samples[sample]['ZS'] = zscore
+            vcf_file.write(record)
+
+    if rem_input['args'].bed:
+        segments_file.close()
+        abberations_file.close()
+
+    if rem_input['args'].vcf:
+        vcf_file.close()
+
+def __add_contigs(fai:str, vcf:VariantFile) -> str:
+
+    prefix = ""
+    with open(fai, "r") as index:
+        for line in index.readlines():
+            if line.startswith("chr"): prefix = "chr"
+            split_line = line.split("\t")
+            vcf.header.add_line("##contig=<ID={},length={}>".format(split_line[0], split_line[1]))
+
+    return prefix
+
+def __add_info(vcf:VariantFile) -> None:
+    infos = [
+        '##ALT=<ID=CNV,Description="Copy number variant region">',
+        '##ALT=<ID=DEL,Description="Deletion relative to the reference">',
+        '##ALT=<ID=DUP,Description="Region of elevated copy number relative to the reference">',
+        '##INFO=<ID=SVLEN,Number=.,Type=Integer,Description="Difference in length between REF and ALT alleles">',
+        '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">',
+        '##INFO=<ID=END,Number=1,Type=Integer,Description="End position of the variant described in this record">',
+        '##FILTER=<ID=cnvQual,Description="CNV with quality below 10">',
+        '##FILTER=<ID=cnvCopyRatio,Description="CNV with copy ratio within +/- 0.2 of 1.0">',
+        '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
+        '##FORMAT=<ID=SM,Number=1,Type=Float,Description="Linear copy ratio of the segment mean">',
+        '##FORMAT=<ID=ZS,Number=1,Type=Float,Description="The z-score calculated for the current CNV">',
+    ]
+    for info in infos:
+        vcf.header.add_line(info)
 
 def __define_gain_loss(segment, rem_input, chr_name, ploidy = 2):
     """
     Define if the abberation is a gain or a loss
     """
-    if (chr_name == 'X' or chr_name == 'Y') and rem_input['ref_gender'] == 'M':
-        ploidy = 1
     if rem_input['args'].beta is not None:
         abberation_cutoff = __get_aberration_cutoff(rem_input['args'].beta, ploidy)
         if float(segment[4]) > abberation_cutoff[1]:
