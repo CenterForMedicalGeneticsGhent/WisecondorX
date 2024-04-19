@@ -250,10 +250,7 @@ def tool_test(args):
 
     ref_sizes = np.append(ref_sizes, ref_sizes_2)
 
-    null_ratios = np.array(
-        [x.tolist() for x in null_ratios_aut_per_bin]
-        + [x.tolist() for x in null_ratios_gon_per_bin]
-    )
+    null_ratios = np.array([x.tolist() for x in null_ratios_aut_per_bin] + [x.tolist() for x in null_ratios_gon_per_bin], dtype=object)
 
     results = {
         "results_r": results_r,
