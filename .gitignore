@@ -3,7 +3,7 @@
 .git
 .idea/
 __pycache__
-/WisecondorX.egg-info/
+wisecondorx.egg-info/
 /build/
 /dist/
 **.pyc
