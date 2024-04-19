@@ -183,15 +183,15 @@ the 'ID_segments.bed'. Particularly interesting for NIPT.
 
 # Dependencies
 
-- R (v3.4) packages
-  - jsonlite (v1.5)
-- R Bioconductor (v3.5) packages
-  - DNAcopy (v1.50.1)
-- Python (v3.6) libraries
-  - scipy (v1.1.0)
-    - scikit-learn (v0.20.0)
-    - pysam (v0.15.1)
-    - numpy (v1.15.2)
-    - matplotlib (v2.2.3)
+- R (v4.3.3) packages
+  - jsonlite (v1.8.8)
+- R Bioconductor packages
+  - DNAcopy (v1.76.0)
+- Python (> v3.6) libraries
+  - scipy (v1.13.0)
+  - scikit-learn (v1.4.2)
+  - pysam (v0.22.0)
+  - numpy (v1.26.4)
+  - matplotlib (v3.8.4)
 
 And of course, other versions are very likely to work as well.
