@@ -1,1 +1,1 @@
-recursive-include wisecondorx *.R
+recursive-include src/wisecondorx *.R
