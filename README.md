@@ -193,5 +193,6 @@ the 'ID_segments.bed'. Particularly interesting for NIPT.
   - pysam (v0.22.0)
   - numpy (v1.26.4)
   - matplotlib (v3.8.4)
+  - pandas
 
 And of course, other versions are very likely to work as well.
