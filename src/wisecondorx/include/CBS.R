@@ -64,7 +64,7 @@ for.cbs <- for.cbs[cbs.mask,]
 
 # CBS
 
-if (is.na(seed) || seed == '') {
+if (!(is.na(seed) || seed == '')) {
   set.seed(seed)
 }
 CNA.object <- CNA(for.cbs$y, for.cbs$chromosome, for.cbs$x, data.type = "logratio", sampleid = "X")
