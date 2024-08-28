@@ -8,6 +8,7 @@ import sys
 import math
 
 import numpy as np
+import pandas as pd
 
 """
 Scales the bin size of a sample.npz to the one  
@@ -104,7 +105,7 @@ def get_z_score(results_c, results):
         segment_w = results_w[segment[0]][segment[1] : segment[2]]
         segment_w = [segment_w[i] for i in range(len(segment_w)) if segment_rr[i] != 0]
         null_segments = [
-            np.ma.average(np.ma.masked_array(x, np.isnan(x)), weights=segment_w)
+            np.ma.average(np.ma.masked_array(x, pd.isnull(x)), weights=segment_w)
             for x in np.transpose(segment_nr)
         ]
         null_mean = np.ma.mean([x for x in null_segments if np.isfinite(x)])
