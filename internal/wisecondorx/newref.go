@@ -2,8 +2,6 @@ package wisecondorx
 
 import (
 	"fmt"
-
-	"github.com/sbinet/npyio/npz"
 )
 
 func WcxNewRef(infiles []string, prefix string, nipt bool, yfrac float64, refsize int, binsize int) {
@@ -12,36 +10,14 @@ func WcxNewRef(infiles []string, prefix string, nipt bool, yfrac float64, refsiz
 	samples := make([]map[string][]int32, len(infiles))
 	// Load the input files
 	for _, infile := range infiles {
-		// Load the input file
-		f, err := npz.Open(infile)
+		infileData, infileBinsize, err := LoadSampleNpzFile(infile)
 		if err != nil {
-			fmt.Println("Error: Unable to open file", infile)
+			fmt.Println("Error: Unable to load file: ", infile)
 			return
-		}
-		defer f.Close()
-
-		// Get the binsize of the input file
-		var sourceBinsize int32 = 0
-		err = f.Read("binsize", &binsize)
-		if err != nil {
-			fmt.Println("Error: Unable to read binsize from file", infile)
-			return
-		}
-
-		// Load the data per chromosome
-		infileData := make(map[string][]int32)
-		for _, k := range f.Keys() {
-			var bins []int32
-			err = f.Read(k, &bins)
-			if err != nil {
-				fmt.Println("Error: Unable to read data from file", infile)
-				return
-			}
-			infileData[k] = bins
 		}
 
 		// Scale the sample to the new bin size
-		scaledSample, err := scaleSample(infileData, int(sourceBinsize), binsize)
+		scaledSample, err := ScaleSample(infileData, int(infileBinsize), binsize)
 		if err != nil {
 			fmt.Println("Error: Unable to scale sample: ", err)
 			return
@@ -49,7 +25,7 @@ func WcxNewRef(infiles []string, prefix string, nipt bool, yfrac float64, refsiz
 		samples = append(samples, scaledSample)
 	}
 
-	sexes, cutoff := trainSexDeterminationModel(samples, yfrac)
+	sexes, _ := trainSexDeterminationModel(samples, yfrac)
 
 	// Do some sanity checks if a NIPT reference is requested
 	if nipt == true {
@@ -69,43 +45,6 @@ func WcxNewRef(infiles []string, prefix string, nipt bool, yfrac float64, refsiz
 			samples[i] = correctSex(sample, sexes[i])
 		}
 	}
-
-	totalMask, binsPerChromosome := calculateMask(samples)
-
-}
-
-func scaleSample(sample map[string][]int32, from int, to int) (map[string][]int32, error) {
-	// Scale the sample to a new bin size
-
-	// Check if the new bin size is equal to the old bin size
-	if to == from {
-		return sample, nil
-	}
-
-	// Check if the new bin size is larger than the old bin size
-	if to < from {
-		return nil, fmt.Errorf("new bin size must be larger than the old bin size")
-	}
-
-	// Check if the new bin size is a multiple of the old bin size
-	if to%from != 0 {
-		fmt.Println("Error: New bin size must be a multiple of the old bin size")
-		return nil, fmt.Errorf("new bin size must be a multiple of the old bin size")
-	}
-
-	sampleScaled := make(map[string][]int32)
-	scaleFactor := to / from
-
-	for chromosome, bins := range sample {
-		scaledBinsLen := len(bins) / scaleFactor
-		sampleScaled[chromosome] = make([]int32, scaledBinsLen)
-		for i := 0; i < scaledBinsLen; i++ {
-			sampleScaled[chromosome][i] = IntSliceSum(bins[i*scaleFactor : i*scaleFactor+scaleFactor])
-		}
-
-	}
-
-	return sampleScaled, nil
 }
 
 func trainSexDeterminationModel(samples []map[string][]int32, yfrac float64) (sexes []string, cutoff float64) {
