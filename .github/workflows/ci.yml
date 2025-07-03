@@ -1,0 +1,81 @@
+# This workflow defines Continuous Integration and Continuous Delivery for a Go application.
+# It includes linting on every push and a more comprehensive build, lint, and publish
+# process on every new release.
+
+name: Go CI/CD
+
+on:
+  push:
+    branches:
+      - master # Trigger on pushes to the main branch
+      - dev # Or any other development branch you use
+  release:
+    types: [published] # Trigger when a new release is published
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest # Run on a fresh Ubuntu environment
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # Action to check out your repository code
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24' # Specify the Go version to use (adjust as needed)
+          cache: true # Cache Go modules for faster builds
+
+  build_and_publish:
+    name: Build & Publish
+    runs-on: ubuntu-latest # Run on a fresh Ubuntu environment
+    needs: lint # This job depends on the 'lint' job, so it only runs if lint passes
+    if: github.event_name == 'release' && github.event.action == 'published' # Only run this job on published releases
+
+    strategy:
+      matrix:
+        # Define the operating systems and architectures to build for
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        arch: [amd64, arm64]
+        exclude:
+          # Exclude combinations that are not commonly used or supported
+          - os: windows-latest
+            arch: arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download # Ensure all Go modules are downloaded
+
+      - name: Build
+        # Set GOOS and GOARCH environment variables for cross-compilation
+        env:
+          GOOS: ${{ (matrix.os == 'ubuntu-latest' && 'linux') || (matrix.os == 'windows-latest' && 'windows') || (matrix.os == 'macos-latest' && 'darwin') }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          APP_NAME="wisecondorx"
+          OUTPUT_DIR="./bin"
+          OUTPUT_NAME="${APP_NAME}-${GOOS}-${GOARCH}"
+
+          # Add .exe extension for Windows builds
+          if [ "$GOOS" = "windows" ]; then
+            OUTPUT_NAME="${OUTPUT_NAME}.exe"
+          fi
+
+          mkdir -p ${OUTPUT_DIR} # Create output directory if it doesn't exist
+          go build -o ${OUTPUT_DIR}/${OUTPUT_NAME} .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}-${{ matrix.os }}-${{ matrix.arch }} # Name the artifact clearly
+          path: ./bin/* # Path to the built binary (adjust if your build path is different)
+
