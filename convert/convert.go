@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 
 	"github.com/biogo/hts/bam"
@@ -81,7 +82,7 @@ var ConvertCmd cli.Command = cli.Command{
 		&cli.StringSliceFlag{
 			Name:        "gonosomes",
 			Aliases:     []string{"g"},
-			Usage:       "Overwrite default gonosomes (chrX, chrY)",
+			Usage:       "Overwrite default gonosomes.",
 			DefaultText: "[chrX, chrY]",
 			Value:       []string{"chrX", "chrY"},
 		},
@@ -96,6 +97,24 @@ var ConvertCmd cli.Command = cli.Command{
 		// Check if the input file exists
 		if _, err := os.Stat(infile); os.IsNotExist(err) {
 			return nil, cli.Exit("Error: Input file does not exist", 1)
+		}
+		// Check if the input file has an index
+		// if file extension is .bam, check for bai or csi index
+		if ext := filepath.Ext(infile); ext == ".bam" {
+			if _, err := os.Stat(infile + ".bai"); os.IsNotExist(err) {
+				if _, err := os.Stat(infile + ".csi"); os.IsNotExist(err) {
+					return nil, cli.Exit("Error: BAM file index does not exist. Please provide a .bai or .csi file", 1)
+				}
+			}
+		}
+		// if file extension is .cram, check if a reference is given and check for crai index
+		if ext := filepath.Ext(infile); ext == ".cram" {
+			if cmd.String("reference") == "" {
+				return nil, cli.Exit("Error: Reference genome must be specified for CRAM files using the --reference flag", 1)
+			}
+			if _, err := os.Stat(infile + ".crai"); os.IsNotExist(err) {
+				return nil, cli.Exit("Error: CRAM file index does not exist. Please provide a .crai file", 1)
+			}
 		}
 
 		return nil, nil

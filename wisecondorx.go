@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/matthdsm/wisecondorx/convert"
+	"github.com/matthdsm/wisecondorx/docs"
 	"github.com/matthdsm/wisecondorx/newref"
 	"github.com/matthdsm/wisecondorx/predict"
 
@@ -73,6 +74,7 @@ func main() {
 			&convert.ConvertCmd,
 			&newref.NewRefCmd,
 			&predict.PredictCmd,
+			&docs.BuildCmd,
 		},
 		EnableShellCompletion: true,
 		HideHelp:              false,
