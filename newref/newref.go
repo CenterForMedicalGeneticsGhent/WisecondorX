@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/matthdsm/wisecondorx/utils"
 	"github.com/urfave/cli/v3"
+	"gonum.org/v1/gonum/floats"
 )
 
 var (
@@ -90,17 +92,17 @@ var NewRefCmd cli.Command = cli.Command{
 func WcxNewRef(infiles []string, prefix string, nipt bool, yfrac float64, refsize int, binsize int) {
 	// Create a new reference using healthy reference samples
 
-	samples := make([]map[string][]int32, len(infiles))
+	samples := make([]map[string][]float64, len(infiles))
 	// Load the input files
 	for _, infile := range infiles {
-		infileData, infileBinsize, err := LoadSampleNpzFile(infile)
+		infileData, infileBinsize, err := utils.LoadSampleNpzFile(infile)
 		if err != nil {
 			fmt.Println("Error: Unable to load file: ", infile)
 			return
 		}
 
 		// Scale the sample to the new bin size
-		scaledSample, err := ScaleSample(infileData, int(infileBinsize), binsize)
+		scaledSample, err := utils.ScaleSample(infileData, int(infileBinsize), binsize)
 		if err != nil {
 			fmt.Println("Error: Unable to scale sample: ", err)
 			return
@@ -130,7 +132,7 @@ func WcxNewRef(infiles []string, prefix string, nipt bool, yfrac float64, refsiz
 	}
 }
 
-func trainSexDeterminationModel(samples []map[string][]int32, yfrac float64) (sexes []string, cutoff float64) {
+func trainSexDeterminationModel(samples []map[string][]float64, yfrac float64) (sexes []string, cutoff float64) {
 	// Train the sex determination model
 	sexes = make([]string, len(samples))
 	// Create the training data
@@ -139,10 +141,10 @@ func trainSexDeterminationModel(samples []map[string][]int32, yfrac float64) (se
 
 	// Calculate the Y fraction for each sample
 	for _, sample := range samples {
-		sliceSumY := IntSliceSum(sample["chrY"])
+		sliceSumY := floats.Sum(sample["chrY"])
 		sliceSumAll := 0.0
 		for _, bins := range sample {
-			sliceSumAll += float64(IntSliceSum(bins))
+			sliceSumAll += floats.Sum(bins)
 		}
 		yfrac := float64(sliceSumY) / sliceSumAll
 		yfracs = append(yfracs, yfrac)
@@ -152,15 +154,15 @@ func trainSexDeterminationModel(samples []map[string][]int32, yfrac float64) (se
 	return sexes, cutoff
 }
 
-func correctSex(sample map[string][]int32, sex string) map[string][]int32 {
+func correctSex(sample map[string][]float64, sex string) map[string][]float64 {
 	//Levels gonosomal reads with the one at the autosomes.
 	if sex == "M" {
-		correctedChrX := make([]int32, len(sample["chrX"]))
+		correctedChrX := make([]float64, len(sample["chrX"]))
 		for _, v := range sample["chrX"] {
 			correctedChrX = append(correctedChrX, v*2)
 		}
 		sample["chrX"] = correctedChrX
-		correctedChrY := make([]int32, len(sample["chrY"]))
+		correctedChrY := make([]float64, len(sample["chrY"]))
 		for _, v := range sample["chrY"] {
 			correctedChrY = append(correctedChrY, v*2)
 		}

@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"./internal/convert"
-	"./internal/newref"
-	"./internal/predict"
+	"github.com/matthdsm/wisecondorx/convert"
+	"github.com/matthdsm/wisecondorx/newref"
+	"github.com/matthdsm/wisecondorx/predict"
 
 	"github.com/urfave/cli/v3"
 )
@@ -70,9 +70,9 @@ func main() {
 			},
 		},
 		Commands: []*cli.Command{
-			convert.ConvertCmd,
-			newref.NewRefCmd,
-			predict.PredictCmd,
+			&convert.ConvertCmd,
+			&newref.NewRefCmd,
+			&predict.PredictCmd,
 		},
 		EnableShellCompletion: true,
 		HideHelp:              false,

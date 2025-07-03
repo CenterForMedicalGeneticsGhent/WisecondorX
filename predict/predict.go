@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/matthdsm/wisecondorx/utils"
 	"github.com/sbinet/npyio/npz"
 	"github.com/urfave/cli/v3"
 )
@@ -16,7 +17,7 @@ var (
 	prefix    string // Prefix for output files
 )
 
-var PredictCmd = &cli.Command{
+var PredictCmd = cli.Command{
 	Name:      "predict",
 	Usage:     "Find copy number aberrations",
 	ArgsUsage: "<input.npz> <reference.npz> <prefix>",
@@ -168,7 +169,7 @@ func WcxPredict(infile string, reference string, prefix string, minrefbins int, 
 	// Predict chromosomal aberrations
 
 	// Load the input npz file
-	inFileData, inFileBinsize, err := LoadSampleNpzFile(infile)
+	inFileData, inFileBinsize, err := utils.LoadSampleNpzFile(infile)
 	if err != nil {
 		fmt.Println("Error: Unable to load file: ", infile)
 		return
@@ -182,7 +183,7 @@ func WcxPredict(infile string, reference string, prefix string, minrefbins int, 
 	}
 
 	// Scale the sample to the reference bin size
-	_, err = ScaleSample(inFileData, int(inFileBinsize), int(refFileBinsize))
+	_, err = utils.ScaleSample(inFileData, int(inFileBinsize), int(refFileBinsize))
 	if err != nil {
 		fmt.Println("Error: Unable to scale sample: ", err)
 		return
