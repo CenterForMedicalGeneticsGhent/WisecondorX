@@ -7,6 +7,7 @@ require (
 	github.com/sbinet/npyio v0.9.0
 	github.com/urfave/cli/v3 v3.3.8
 	gonum.org/v1/gonum v0.16.0
+	v.io v0.2.0
 )
 
 require (

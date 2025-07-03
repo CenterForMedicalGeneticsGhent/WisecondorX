@@ -3,14 +3,18 @@ package convert
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
-	"regexp"
+	"os/exec"
 	"strconv"
 
 	"github.com/biogo/hts/bam"
 	"github.com/biogo/hts/sam"
 	"github.com/sbinet/npyio/npz"
 	"github.com/urfave/cli/v3"
+
+	"v.io/v23/glob"
 )
 
 var (
@@ -67,6 +71,20 @@ var ConvertCmd cli.Command = cli.Command{
 			Usage:   "Do not remove duplicates",
 			Value:   false,
 		},
+		&cli.StringFlag{
+			Name:        "exclude-contigs",
+			Aliases:     []string{"e"},
+			Usage:       "Glob pattern to exclude certain contigs from conversion",
+			DefaultText: "{*_alt,*_decoy,*_random,chrUn*,HLA*,chrM,chrEBV}",
+			Value:       "{*_alt,*_decoy,*_random,chrUn*,HLA*,chrM,chrEBV}",
+		},
+		&cli.StringSliceFlag{
+			Name:        "gonosomes",
+			Aliases:     []string{"g"},
+			Usage:       "Overwrite default gonosomes (chrX, chrY)",
+			DefaultText: "[chrX, chrY]",
+			Value:       []string{"chrX", "chrY"},
+		},
 	},
 	Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 		// Check if the correct number of arguments is provided
@@ -87,38 +105,61 @@ var ConvertCmd cli.Command = cli.Command{
 	},
 }
 
-func WcxConvert(infile string, prefix string, binsize int, RemoveDup bool, reference string) {
-	// Convert and filter aligned reads to .wcx format
+type reader struct {
+	io.ReadCloser
+	cmd *exec.Cmd
+}
 
-	// Read sam/bam/cram file
-	// Open the file
-	f, err := os.Open(infile)
-	if err != nil {
-		fmt.Printf("Error: Unable to open file %s", infile)
-		return
+func (r *reader) Close() error {
+	if err := r.cmd.Wait(); err != nil {
+		return err
 	}
-	defer f.Close()
+	return r.ReadCloser.Close()
+}
 
-	// if infile ends with .bam
-	b, err := bam.NewReader(f, 0)
+// NewReader returns a bam.Reader from any path that samtools can read.
+// This is a patch to enable cram compatibilty
+func NewReader(path string, rd int, fasta string) (*bam.Reader, error) {
+	cmd := exec.Command("samtools", "view", "-T", fasta, "-b", "-u", "-h", path)
+	cmd.Stderr = os.Stderr
+	pipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err = cmd.Start(); err != nil {
+		pipe.Close()
+		return nil, err
+	}
+	cr := &reader{ReadCloser: pipe, cmd: cmd}
+	return bam.NewReader(cr, rd)
+}
+
+func WcxConvert(infile string, prefix string, binsize int, RemoveDup bool, reference string, excludeContigs string, gonosomes []string) {
+	// Convert and filter aligned reads to .wcx format
+	b, err := NewReader(infile, 0, reference)
 	if err != nil {
 		fmt.Printf("Error: Unable to read bam file %s", infile)
 		return
 	}
 	defer b.Close()
 
-	// Generate a map of chromosome names and the length of the chromosome
-	// and a map of the number of bins per chromosome
+	// Generate a map of chromosome names and the number of bins per chromosome.
+	// Exclude chromosomes defined in the 'excludeContigs` glob pattern
+	if excludeContigs == "" {
+		excludeContigs = "{*_alt,*_decoy,*_random,chrUn*,HLA*,chrM,chrEBV}"
+	}
+	excludeContigsGlob, err := glob.Parse(excludeContigs)
+	if err != nil {
+		slog.Error("Unable to parse contig exclusion glob")
+	}
 
-	canonicalChromosomeRegex := regexp.MustCompile(`^chr[0-9XY]+$`)
-
-	binsPerChromosome := make(map[string][]int32)
+	binsPerChromosome := make(map[string][]float64)
 	for _, ref := range b.Header().Refs() {
 		// skip the chromosome if not autosomes or gonosomes
-		if canonicalChromosomeRegex.Match([]byte(ref.Name())) == false {
+		if excludeContigsGlob.Head().Match(ref.Name()) {
 			continue
 		}
-		binsPerChromosome[ref.Name()] = make([]int32, ref.Len()/binsize+1)
+		binsPerChromosome[ref.Name()] = make([]float64, ref.Len()/binsize+1)
 	}
 
 	currentChromosome := ""
@@ -132,13 +173,13 @@ func WcxConvert(infile string, prefix string, binsize int, RemoveDup bool, refer
 			break
 		}
 
-		// Skip the read if not on autosomes or gonosomes
-		if canonicalChromosomeRegex.Match([]byte(samRecord.Ref.Name())) == false {
+		// Skip the read if contig is excluded
+		if excludeContigsGlob.Head().Match(samRecord.Ref.Name()) {
 			continue
 		}
 
 		if currentChromosome != samRecord.Ref.Name() {
-			fmt.Println("Processing chromosome: ", samRecord.Ref.Name())
+			slog.Info("Processing chromosome: " + samRecord.Ref.Name())
 			currentChromosome = samRecord.Ref.Name()
 		}
 
@@ -189,7 +230,7 @@ func WcxConvert(infile string, prefix string, binsize int, RemoveDup bool, refer
 		}
 	}
 	// Write binsize
-	err = npz.Write("binsize", int32(binsize))
+	err = npz.Write("binsize", float64(binsize))
 	if err != nil {
 		fmt.Printf("Error: Unable to write to file %s.npz: %s", prefix, err)
 	}
