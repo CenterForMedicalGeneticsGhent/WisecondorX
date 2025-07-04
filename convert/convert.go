@@ -8,14 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 
 	"github.com/biogo/hts/bam"
 	"github.com/biogo/hts/sam"
 	"github.com/sbinet/npyio/npz"
 	"github.com/urfave/cli/v3"
-
-	"v.io/v23/glob"
 )
 
 var (
@@ -75,9 +74,9 @@ var ConvertCmd cli.Command = cli.Command{
 		&cli.StringFlag{
 			Name:        "exclude-contigs",
 			Aliases:     []string{"e"},
-			Usage:       "Glob pattern to exclude certain contigs from conversion",
-			DefaultText: "{*_alt,*_decoy,*_random,chrUn*,HLA*,chrM,chrEBV}",
-			Value:       "{*_alt,*_decoy,*_random,chrUn*,HLA*,chrM,chrEBV}",
+			Usage:       "Regex pattern to exclude certain contigs from conversion",
+			DefaultText: "^(.*_alt|.*_decoy|.*_random|chrUn.*|HLA.*|chrM|chrEBV|\\*)$",
+			Value:       "^(.*_alt|.*_decoy|.*_random|chrUn.*|HLA.*|chrM|chrEBV|\\*)$",
 		},
 		&cli.StringSliceFlag{
 			Name:        "gonosomes",
@@ -95,9 +94,11 @@ var ConvertCmd cli.Command = cli.Command{
 		}
 
 		// Check if the input file exists
+		infile = cmd.Args().Get(0)
 		if _, err := os.Stat(infile); os.IsNotExist(err) {
 			return nil, cli.Exit("Error: Input file does not exist", 1)
 		}
+
 		// Check if the input file has an index
 		// if file extension is .bam, check for bai or csi index
 		if ext := filepath.Ext(infile); ext == ".bam" {
@@ -120,6 +121,15 @@ var ConvertCmd cli.Command = cli.Command{
 		return nil, nil
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
+		WcxConvert(
+			infile,
+			prefix,
+			cmd.Int("binsize"),
+			cmd.Bool("normdup"),
+			cmd.String("reference"),
+			cmd.String("exclude-contigs"),
+			cmd.StringSlice("gonosomes"),
+		)
 		return nil
 	},
 }
@@ -138,8 +148,11 @@ func (r *reader) Close() error {
 
 // NewReader returns a bam.Reader from any path that samtools can read.
 // This is a patch to enable cram compatibilty
-func NewReader(path string, rd int, fasta string) (*bam.Reader, error) {
-	cmd := exec.Command("samtools", "view", "-T", fasta, "-b", "-u", "-h", path)
+func NewHTSReader(path string, rd int, fasta string) (*bam.Reader, error) {
+	cmd := exec.Command("samtools", "view", "--reference", fasta, "-b", "-u", "-h", path)
+	if fasta == "" {
+		cmd = exec.Command("samtools", "view", "-b", "-u", "-h", path)
+	}
 	cmd.Stderr = os.Stderr
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -155,27 +168,28 @@ func NewReader(path string, rd int, fasta string) (*bam.Reader, error) {
 
 func WcxConvert(infile string, prefix string, binsize int, RemoveDup bool, reference string, excludeContigs string, gonosomes []string) {
 	// Convert and filter aligned reads to .wcx format
-	b, err := NewReader(infile, 0, reference)
+	b, err := NewHTSReader(infile, 0, reference)
 	if err != nil {
-		fmt.Printf("Error: Unable to read bam file %s", infile)
+		fmt.Printf("Error: Unable to read file %s", infile)
 		return
 	}
 	defer b.Close()
 
 	// Generate a map of chromosome names and the number of bins per chromosome.
-	// Exclude chromosomes defined in the 'excludeContigs` glob pattern
+	// Exclude chromosomes defined in the 'excludeContigs` regex pattern
 	if excludeContigs == "" {
-		excludeContigs = "{*_alt,*_decoy,*_random,chrUn*,HLA*,chrM,chrEBV}"
+		excludeContigs = "^(.*_alt|.*_decoy|.*_random|chrUn.*|HLA.*|chrM|chrEBV|\\*)$"
 	}
-	excludeContigsGlob, err := glob.Parse(excludeContigs)
+	excludeContigsRegex, err := regexp.Compile(excludeContigs)
 	if err != nil {
-		slog.Error("Unable to parse contig exclusion glob")
+		slog.Error("Unable to compile contig exclusion regex")
 	}
 
 	binsPerChromosome := make(map[string][]float64)
 	for _, ref := range b.Header().Refs() {
 		// skip the chromosome if not autosomes or gonosomes
-		if excludeContigsGlob.Head().Match(ref.Name()) {
+		if excludeContigsRegex.Match([]byte(ref.Name())) {
+			slog.Debug("Excluding chromosome: " + ref.Name())
 			continue
 		}
 		binsPerChromosome[ref.Name()] = make([]float64, ref.Len()/binsize+1)
@@ -193,7 +207,7 @@ func WcxConvert(infile string, prefix string, binsize int, RemoveDup bool, refer
 		}
 
 		// Skip the read if contig is excluded
-		if excludeContigsGlob.Head().Match(samRecord.Ref.Name()) {
+		if excludeContigsRegex.Match([]byte(samRecord.Ref.Name())) {
 			continue
 		}
 

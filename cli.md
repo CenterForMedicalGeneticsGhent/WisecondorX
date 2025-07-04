@@ -37,7 +37,7 @@ Convert and filter aligned reads to .npz format
 
 **--binsize, -b**="": Size per bin in bp. (default: 5000)
 
-**--exclude-contigs, -e**="": Glob pattern to exclude certain contigs from conversion (default: {*_alt,*_decoy,*_random,chrUn*,HLA*,chrM,chrEBV})
+**--exclude-contigs, -e**="": Regex pattern to exclude certain contigs from conversion (default: ^(.*_alt|.*_decoy|.*_random|chrUn.*|HLA.*|chrM|chrEBV)$)
 
 **--gonosomes, -g**="": Gonosome chromosomes to be used in the analysis. Should generally not be tweaked (default: [chrX chrY])
 

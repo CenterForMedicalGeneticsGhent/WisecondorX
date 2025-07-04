@@ -1,9 +1,11 @@
 # WisecondorX
 
-![Conda Version](https://img.shields.io/conda/v/bioconda/wisecondorx)
 [![GitHub Actions CI Status](https://github.com/matthdsm/wisecondorx/actions/workflows/ci.yml/badge.svg)](https://github.com/matthdsm/wisecondorx/actions/workflows/ci.yml)
 [![GitHub Actions Linting Status](https://github.com/matthdsm/wisecondorx/actions/workflows/linting.yml/badge.svg)](https://github.com/matthdsm/wisecondorx/actions/workflows/linting.yml)
-
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/wisecondorx/README.html)
+[![Anaconda-Server Badge](https://anaconda.org/bioconda/wisecondorx/badges/downloads.svg)](https://anaconda.org/bioconda/wisecondorx)
+[![Anaconda-Server Badge](https://anaconda.org/bioconda/wisecondorx/badges/latest_release_date.svg)](https://anaconda.org/bioconda/wisecondorx)
+[![Anaconda-Server Badge](https://anaconda.org/bioconda/wisecondorx/badges/version.svg)](https://anaconda.org/bioconda/wisecondorx)
 ## 1. Background
 
 After extensively comparing different (shallow) whole-genome sequencing-based copy number detection tools,
