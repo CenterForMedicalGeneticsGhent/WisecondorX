@@ -196,4 +196,14 @@ func WcxPredict(infile string, reference string, prefix string, minrefbins int, 
 		return
 	}
 	defer ref.Close()
+
+	// Perform the prediction
+
+	// Write the output files
+	// bins
+	// aberrations
+	// segments
+	// statistics
+	// vcf ?
+
 }
