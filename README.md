@@ -1,5 +1,9 @@
 # WisecondorX
 
+![Conda Version](https://img.shields.io/conda/v/bioconda/wisecondorx)
+[![GitHub Actions CI Status](https://github.com/matthdsm/wisecondorx/actions/workflows/ci.yml/badge.svg)](https://github.com/matthdsm/wisecondorx/actions/workflows/ci.yml)
+[![GitHub Actions Linting Status](https://github.com/matthdsm/wisecondorx/actions/workflows/linting.yml/badge.svg)](https://github.com/matthdsm/wisecondorx/actions/workflows/linting.yml)
+
 ## 1. Background
 
 After extensively comparing different (shallow) whole-genome sequencing-based copy number detection tools,
