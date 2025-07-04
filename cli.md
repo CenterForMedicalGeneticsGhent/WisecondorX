@@ -35,17 +35,17 @@ Convert and filter aligned reads to .npz format
 
 >wisecondorx convert [options] <input.bam/cram> <prefix>
 
-**--binsize, -b**="": Bin size (bp) (default: 5000)
+**--binsize, -b**="": Size per bin in bp. (default: 5000)
 
 **--exclude-contigs, -e**="": Glob pattern to exclude certain contigs from conversion (default: {*_alt,*_decoy,*_random,chrUn*,HLA*,chrM,chrEBV})
 
-**--gonosomes, -g**="": Overwrite default gonosomes. (default: [chrX chrY])
+**--gonosomes, -g**="": Gonosome chromosomes to be used in the analysis. Should generally not be tweaked (default: [chrX chrY])
 
 **--help, -h**: show help
 
 **--normdup, --no-remove-duplicates**: Do not remove duplicates
 
-**--reference, -r**="": Reference genome file for cram conversion.
+**--reference, -r**="": Reference genome fasta for cram conversion.
 
 ### help, h
 
@@ -55,15 +55,17 @@ Shows a list of commands or help for one command
 
 Create a new reference using healthy reference samples
 
-**--binsize**="": Scale samples to this bin size (bp), multiples of existing bin sizes only (default: 0)
+**--binsize**="": Size per bin in bp, defines the resolution of the output. Multiples of existing bin sizes only. (default: 0)
 
 **--help, -h**: show help
 
 **--nipt**: Use NIPT reference presets
 
-**--refsize**="": Number of reference locations per target (default: 300)
+**--refsize**="": Number of reference locations per target. Should generally not be tweaked. (default: 300)
 
-**--yfrac**="": Manually set the Y-fraction cutoff to determine sex (default: 0)
+**--threads**="": Number of threads to use for processing. Defaults to the number of available CPU cores. (default: 0)
+
+**--yfrac**="": Y read fraction cutoff, in order to manually define sex. Setting this to 1 will treat all samples as female (default: 0)
 
 ### help, h
 
@@ -77,11 +79,11 @@ Find copy number aberrations
 
 **--beta**="": When beta is given, --zscore is ignored and a ratio cut-off is used to call aberrations. Beta is a number between 0 (liberal) and 1 (conservative) and is optimally close to the purity. (default: 0)
 
-**--blacklist**="": Blacklist file for regions to ignore. Format: chr(	)start(	)end
+**--blacklist**="": Blacklist for masking additional regions; requires headerless .bed file. This is particularly useful when the reference set is too small to recognize some obvious loci, such as centromeres
 
 **--help, -h**: show help
 
-**--maskrepeats**="": Regions with distances > mean + sd * 3 will be masked. Number of masking cycles. (default: 5)
+**--maskrepeats**="": Bins with distances > (mean + sd * 3) in the reference will be masked. This parameter represents the number of masking cycles and defines the stringency of the blacklist (default: 5)
 
 **--minrefbins**="": Minimum amount of sensible reference bins per target bin. (default: 150)
 

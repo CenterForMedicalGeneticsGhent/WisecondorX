@@ -44,7 +44,7 @@ var ConvertCmd cli.Command = cli.Command{
 		&cli.StringFlag{
 			Name:      "reference",
 			Aliases:   []string{"r"},
-			Usage:     "Reference genome file for cram conversion.",
+			Usage:     "Reference genome fasta for cram conversion.",
 			TakesFile: true,
 			Action: func(ctx context.Context, cmd *cli.Command, v string) error {
 				if _, err := os.Stat(v); os.IsNotExist(err) {
@@ -56,7 +56,7 @@ var ConvertCmd cli.Command = cli.Command{
 		&cli.IntFlag{
 			Name:        "binsize",
 			Aliases:     []string{"b"},
-			Usage:       "Bin size (bp)",
+			Usage:       "Size per bin in bp.",
 			DefaultText: "5000",
 			Value:       5000,
 			Action: func(ctx context.Context, cmd *cli.Command, v int) error {
@@ -82,7 +82,7 @@ var ConvertCmd cli.Command = cli.Command{
 		&cli.StringSliceFlag{
 			Name:        "gonosomes",
 			Aliases:     []string{"g"},
-			Usage:       "Overwrite default gonosomes.",
+			Usage:       "Gonosome chromosomes to be used in the analysis. Should generally not be tweaked",
 			DefaultText: "[chrX, chrY]",
 			Value:       []string{"chrX", "chrY"},
 		},

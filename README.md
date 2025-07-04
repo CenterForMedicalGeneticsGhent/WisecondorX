@@ -53,7 +53,7 @@ There are three main stages (converting, reference creating and predicting) when
     - Automated sex prediction, required to consistently analyze sex chromosomes, is based on a Gaussian mixture
       model. If few samples (<20) are included during reference creation, or not both male and female samples (for
       NIPT, this means male and female feti) are represented, this process might not be accurate. Therefore,
-      alternatively, one can manually tweak the [`--yfrac`](#stage-2-create-reference) parameter.
+      alternatively, one can manually tweak the `--yfrac` parameter.
     - It is of paramount importance that the reference set consists of exclusively negative control samples that
       originate from the same sequencer, mapper, reference genome, type of material, ... etc, as the test samples.
       As a rule of thumb, think of all laboratory and _in silico_ steps: the more sources of bias that can be omitted,
@@ -62,60 +62,12 @@ There are three main stages (converting, reference creating and predicting) when
       observe additional improvement concerning normalization.
 - Predict copy number alterations (using the reference file and test .npz cases of interest)
 
-### 2.2.4 Convert aligned reads (bam/cram) to .npz
-
-```bash
-wisecondorx convert input.bam/cram output.npz [--optional arguments]
-```
-
-| <br>Optional argument <br><br> | Function                                                                                                                                                                                                 |
-| :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--reference x`                | Fasta reference to be used with cram inputs                                                                                                                                                              |
-| `--binsize x`                  | Size per bin in bp; the reference bin size should be a multiple of this value. Note that this parameter does not impact the resolution, yet it can be used to optimize processing speed (default: x=5e3) |
-| `--no-remove-duplicates`                    | Use this flag to avoid duplicate removal                                                                                                                                                                 |
-| `--exclude-contigs` | Glob pattern to exclude certain contigs from conversion (default: "{*_alt,*_decoy,__random,chrUn_,HLA*,chrM,chrEBV}"|
-| `--gonosomes x`                | Gonosome chromosomes to be used in the analysis; should generally not be tweaked (default: x=chrX, chrY)                                                                                                 |
-
-### 2.2.5. Create reference
-
-```bash
-WisecondorX newref reference_input_dir/*.npz reference_output.npz [--optional arguments]
-```
-
-| <br>Optional argument <br><br> | Function                                                                                                                                    |
-| :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--nipt`                       | **Always include this flag for the generation of a NIPT reference**                                                                         |
-| `--binsize x`                  | Size per bin in bp, defines the resolution of the output (default: x=1e5)                                                                   |
-| `--refsize x`                  | Amount of reference locations per target; should generally not be tweaked (default: x=300)                                                  |
-| `--yfrac x`                    | Y read fraction cutoff, in order to manually define sex. Setting this to 1 will treat all samples as female                              |
-| `--plotyfrac x`                | plots Y read fraction histogram and Gaussian mixture fit to file x, can help when setting `--yfrac` manually; software quits after plotting |
-| `--cpus x`                     | Number of threads requested (default: x=1)                                                                                                  |
-
-### 2.2.6. Predict copy number alterations
-
-```bash
-WisecondorX predict test_input.npz reference_input.npz output_id [--optional arguments]
-```
-
-| <br>Optional argument <br><br> | Function                                                                                                                                                                                                                          |
-| :----------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--minrefbins x`               | Minimum amount of sensible reference bins per target bin; should generally not be tweaked (default: x=150)                                                                                                                        |
-| `--maskrepeats x`              | Bins with distances > mean + sd \* 3 in the reference will be masked. This parameter represents the number of masking cycles and defines the stringency of the blacklist (default: x=5)                                           |
-| `--zscore x`                   | Z-score cutoff to call segments as aberrations (default: x=5)                                                                                                                                                                     |
-| `--alpha x`                    | P-value cutoff for calling circular binary segmentation breakpoints (default: x=1e-4)                                                                                                                                             |
-| `--beta x`                     | When beta is given, `--zscore` is ignored. Beta sets a ratio cutoff for aberration calling. It's a number between 0 (liberal) and 1 (conservative) and, when used, is optimally close to the purity (e.g. fetal/tumor fraction)   |
-| `--blacklist x`                | Blacklist for masking additional regions; requires headerless .bed file. This is particularly useful when the reference set is too small to recognize some obvious loci (such as centromeres; examples at `./example.blacklist/`) |
-| `--sex x`                   | Force WisecondorX to analyze this case as male (M) or female (F). Useful when e.g. dealing with a loss of chromosome Y, which causes erroneous sex predictions (choices: x=F or x=M)                                           |
-| `--seed`| Random seed for segmentation algorithm (default:None)                                                                                                                                                                                  |
-
-# 2. Parameters
-
-The default parameters are optimized for shallow whole-genome sequencing data (0.1x - 1x coverage) and reference bin
-sizes ranging from 50 to 500 kb.
+An overview of the WisecondorX commands can be found in the [CLI documentation](./cli.md).
+Default parameters are optimized for shallow whole-genome sequencing data (0.1x - 1x coverage) and reference bin sizes ranging from 50 to 500 kb.
 
 # 3. Algorithm
 
-To understand the underlying algorithm, I highly recommend reading
+To understand the underlying algorithm, we highly recommend reading
 [Straver et al (2014)](https://www.ncbi.nlm.nih.gov/pubmed/24170809); and its update shortly introduced in
 [Huijsdens-van Amsterdam et al (2018)](https://www.nature.com/articles/gim201832.epdf). Numerous adaptations to this
 algorithm have been made, yet the central normalization principles remain. Changes include e.g. the inclusion of a sex

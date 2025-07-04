@@ -53,7 +53,7 @@ var PredictCmd = cli.Command{
 		},
 		&cli.IntFlag{
 			Name:        "maskrepeats",
-			Usage:       "Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.",
+			Usage:       "Bins with distances > (mean + sd * 3) in the reference will be masked. This parameter represents the number of masking cycles and defines the stringency of the blacklist",
 			Value:       5,
 			DefaultText: "5",
 			Action: func(ctx context.Context, cmd *cli.Command, v int) error {
@@ -99,7 +99,7 @@ var PredictCmd = cli.Command{
 		},
 		&cli.StringFlag{
 			Name:      "blacklist",
-			Usage:     "Blacklist file for regions to ignore. Format: chr(\t)start(\t)end",
+			Usage:     "Blacklist for masking additional regions; requires headerless .bed file. This is particularly useful when the reference set is too small to recognize some obvious loci, such as centromeres",
 			Value:     "",
 			TakesFile: true,
 			Action: func(ctx context.Context, cmd *cli.Command, v string) error {
@@ -128,7 +128,7 @@ var PredictCmd = cli.Command{
 			DefaultText: "42",
 			Action: func(ctx context.Context, cmd *cli.Command, v int) error {
 				if v < 0 {
-					return cli.Exit("Error: Seed must be a non-negative integer", 1)
+					return cli.Exit("Error: Seed must be a positive integer", 1)
 				}
 				return nil
 			},

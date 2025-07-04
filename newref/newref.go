@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/matthdsm/wisecondorx/utils"
 	"github.com/urfave/cli/v3"
@@ -43,7 +44,7 @@ var NewRefCmd cli.Command = cli.Command{
 		},
 		&cli.Float64Flag{
 			Name:        "yfrac",
-			Usage:       "Manually set the Y-fraction cutoff to determine sex",
+			Usage:       "Y read fraction cutoff, in order to manually define sex. Setting this to 1 will treat all samples as female",
 			DefaultText: "Automatically determined",
 			Action: func(ctx context.Context, cmd *cli.Command, v float64) error {
 				if v < 0 || v > 1 {
@@ -54,7 +55,7 @@ var NewRefCmd cli.Command = cli.Command{
 		},
 		&cli.IntFlag{
 			Name:        "refsize",
-			Usage:       "Number of reference locations per target",
+			Usage:       "Number of reference locations per target. Should generally not be tweaked.",
 			Value:       300,
 			DefaultText: "300",
 			Action: func(ctx context.Context, cmd *cli.Command, v int) error {
@@ -66,10 +67,23 @@ var NewRefCmd cli.Command = cli.Command{
 		},
 		&cli.IntFlag{
 			Name:  "binsize",
-			Usage: "Scale samples to this bin size (bp), multiples of existing bin sizes only",
+			Usage: "Size per bin in bp, defines the resolution of the output. Multiples of existing bin sizes only.",
 			Action: func(ctx context.Context, cmd *cli.Command, v int) error {
 				if v <= 0 {
 					return cli.Exit("Error: Binsize must be a positive integer", 1)
+				}
+				return nil
+			},
+		},
+		&cli.IntFlag{
+			Name:  "threads",
+			Usage: "Number of threads to use for processing. Defaults to the number of available CPU cores.",
+			Value: 0, // 0 means use all available cores
+			Action: func(ctx context.Context, cmd *cli.Command, v int) error {
+				if v < 0 {
+					return cli.Exit("Error: Number of threads must be a positive integer", 1)
+				} else if v > 0 {
+					runtime.GOMAXPROCS(v) // Set the number of threads to use
 				}
 				return nil
 			},
