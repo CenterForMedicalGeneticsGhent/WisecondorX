@@ -89,8 +89,7 @@ technique (the test case vs the reference cases).
 
 ## \<prefix\>_aberrations.bed
 
-This file contains aberrant segments, defined by the `--beta` or
-[`--zscore`] parameters.
+This file contains aberrant segments, defined by the `--beta` or `--zscore` parameters.
 
 ## \<prefix\>_statistics.bed
 
