@@ -474,6 +474,13 @@ def main():
     parser_test.add_argument(
         "--seed", type=int, default=None, help="Seed for segmentation algorithm"
     )
+    parser_test.add_argument(
+        "--regions",
+        type=str,
+        default=None,
+        help="List of regions to be marked on the output plot, structure of header-less "
+        "file: chr...(/t)startpos(/t)endpos(/n)name. If not given, no regions will be marked.",
+    )
     parser_test.set_defaults(func=tool_test)
 
     args = parser.parse_args(sys.argv[1:])

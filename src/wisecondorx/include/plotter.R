@@ -30,6 +30,7 @@ gender = input$ref_gender
 beta = as.numeric(input$beta)
 zcutoff = as.numeric(input$zscore)
 ylim = input$ylim
+regions = read.delim(input$regions, header=F, sep="\t", stringsAsFactors=F)
 plot.title = input$plot_title
 
 if (input$cairo) options(bitmaptype='cairo')
@@ -107,6 +108,7 @@ lighter.grey = "#e0e0e0"
 color.A = rgb(84, 84, 84, maxColorValue=255)
 color.B = rgb(227, 200, 138, maxColorValue=255)
 color.C = rgb(141, 209, 198, maxColorValue=255)
+color.D = rgb(150, 80, 33, maxColorValue=255)
 color.X <- c(color.C, color.A, color.B)
 
 color.AA = rgb(84, 84, 84, 80, maxColorValue=255)
@@ -164,7 +166,7 @@ for (ab in input$results_c){
 
   if (!is.na(beta)){
     if (height < get.aberration.cutoff(beta, ploidy)[1]){
-    dot.cols[start:end] = color.B
+      dot.cols[start:end] = color.B
     }
     if (height > get.aberration.cutoff(beta, ploidy)[2]){
       dot.cols[start:end] = color.C
@@ -179,10 +181,70 @@ for (ab in input$results_c){
   }
 }
 
+# create labels dataframe
+gene_labels <- data.frame(start_bin=integer(), end_bin=integer(), label=character(), label_position=double(), label_adj=integer())
+# Check regions and assign to correct bins
+for (i in seq_len(nrow(regions))){
+  region = regions[i,]
+  chr = gsub("chr", "", region[1])
+  if (chr == "X") chr = 23
+  if (chr == "Y") chr = 24
+  chr = as.integer(chr) 
+  # Check for valid chromosome index
+  if (is.na(chr) || chr < 1 || chr > 24) {
+    warning(paste("Skipping region with invalid chromosome:", region[1]))
+    next
+  }
+  # Check for numeric start/end
+  if (is.na(as.integer(region[2])) || is.na(as.integer(region[3]))) {
+    warning(paste("Skipping region with invalid start/end:", region[2], region[3]))
+    next
+  }
+  # Figure out start and end bins based on coordinates 
+  start_bin = ceiling(as.integer(region[2])/binsize) + chr.ends[chr] + 1 
+  end_bin = ceiling(as.integer(region[3])/binsize) + chr.ends[chr]
+  # Check for valid start/end
+  if (start > end) {
+    warning(paste("Skipping region with start > end:", start, end))
+    next
+  }
+ # Figure out where to place the label
+  region_ratio = mean(ratio[start_bin:end_bin], na.rm=TRUE)
+  if (region_ratio > 0){
+    label_position = max(ratio[start_bin:end_bin]) + 0.2
+    label_adj = 0
+  } else {
+    label_position =  min(ratio[start_bin:end_bin]) - 0.2
+    label_adj = 1
+  }
+  gene_labels <- rbind(gene_labels, 
+                       data.frame(start_bin=start_bin, end_bin=end_bin,
+                                  label=region[4],
+                                  label_position=label_position,
+                                  label_adj=label_adj))
+}
+colnames(gene_labels) <- c("start_bin", "end_bin", "label",
+                           "label_position", "label_adj")
+
 par(new=T)
 plot(ratio, main="", axes=F,
      xlab="", ylab=expression('log'[2]*'(ratio)'), col=dot.cols, pch=16,
      ylim=c(chr.wide.lower.limit,chr.wide.upper.limit), cex=dot.cex)
+
+# Plot gene labels
+for (i in seq_len(nrow(gene_labels))){
+  start_bin = gene_labels$start_bin[i]
+  end_bin = gene_labels$end_bin[i]
+  label = gene_labels$label[i]
+  label_position = gene_labels$label_position[i]
+  label_adj = gene_labels$label_adj[i]
+  # Overlay the points for the gene region
+  points(seq(start_bin, end_bin), ratio[start_bin:end_bin],
+         col=color.D, pch=1, cex=1.1, lwd=3)
+  # Add the label
+  text(start_bin + (end_bin - start_bin) / 2, label_position,
+       labels=label, col=color.D, cex=0.8, srt=90, adj=label_adj)
+}
 
 par(xpd=NA)
 text(chr.mids, par("usr")[3], labels=labels, srt=45, pos=1)
@@ -334,6 +396,21 @@ for (c in chrs){
 
   rect(0, lower.limit - 10, chr.ends[c], upper.limit + 10, col="white", border=NA)
   rect(chr.ends[c+1], lower.limit - 10, chr.ends[length(chr.ends)], upper.limit + 10, col="white", border=NA)
+
+  for (i in seq_len(nrow(gene_labels))){
+    start_bin = gene_labels$start_bin[i]
+    end_bin = gene_labels$end_bin[i]
+    label = gene_labels$label[i]
+    label_position = gene_labels$label_position[i]
+    label_adj = gene_labels$label_adj[i]
+    # Overlay the points for the gene region
+    points(seq(start_bin, end_bin), ratio[start_bin:end_bin], col=color.D, pch=1, cex=1.1, lwd=3)
+    # Add the label
+    par(xpd=NA)
+    text(start_bin + (end_bin - start_bin) / 2, label_position,
+        labels=label, col=color.D, cex=0.9, srt=90, adj=label_adj)
+    par(xpd=F)
+} 
 
   par(xpd=NA)
   text(x.labels.at, par("usr")[3], labels=x.labels, srt=45, pos=1)
