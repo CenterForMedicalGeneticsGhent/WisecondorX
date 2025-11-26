@@ -43,16 +43,16 @@ def tool_newref_prep(args, samples, gender, mask, bins_per_chr):
         sum(masked_bins_per_chr[: x + 1]) for x in range(len(masked_bins_per_chr))
     ]
 
+    np.save(args.prepdatafile, pca_corrected_data)
+
     np.savez_compressed(
         args.prepfile,
         binsize=args.binsize,
         gender=gender,
         mask=mask,
-        masked_data=masked_data,
         bins_per_chr=bins_per_chr,
         masked_bins_per_chr=masked_bins_per_chr,
         masked_bins_per_chr_cum=masked_bins_per_chr_cum,
-        pca_corrected_data=pca_corrected_data,
         pca_components=pca.components_,
         pca_mean=pca.mean_,
     )
@@ -66,21 +66,23 @@ is processed by a separate thread.
 
 
 def tool_newref_main(args, cpus):
+    pca_corrected_data = np.load(args.prepdatafile, mmap_mode="r")
     if cpus != 1:
         with futures.ThreadPoolExecutor(max_workers=args.cpus) as executor:
             for part in range(1, cpus + 1):
                 this_args = copy.copy(args)
                 this_args.part = [part, cpus]
-                executor.submit(_tool_newref_part, this_args)
+                executor.submit(_tool_newref_part, this_args, pca_corrected_data)
             executor.shutdown(wait=True)
     else:
         for part in range(1, cpus + 1):
             args.part = [part, cpus]
-            _tool_newref_part(args)
+            _tool_newref_part(args, pca_corrected_data)
 
     tool_newref_post(args, cpus)
 
     os.remove(args.prepfile)
+    os.remove(args.prepdatafile)
     for part in range(1, cpus + 1):
         os.remove("{}_{}.npz".format(args.partfile, str(part)))
 
@@ -91,7 +93,7 @@ within-sample reference creation.
 """
 
 
-def _tool_newref_part(args):
+def _tool_newref_part(args, pca_corrected_data):
     if args.part[0] > args.part[1]:
         logging.critical(
             "Part should be smaller or equal to total parts:{} > {} is wrong".format(
@@ -106,7 +108,6 @@ def _tool_newref_part(args):
         sys.exit()
 
     npzdata = np.load(args.prepfile, encoding="latin1", allow_pickle=True)
-    pca_corrected_data = npzdata["pca_corrected_data"]
     masked_bins_per_chr = npzdata["masked_bins_per_chr"]
     masked_bins_per_chr_cum = npzdata["masked_bins_per_chr_cum"]
 
