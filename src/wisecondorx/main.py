@@ -54,6 +54,7 @@ def tool_newref(args):
 
     args.basepath = base_path
     args.prepfile = "{}_prep.npz".format(base_path)
+    args.prepdatafile = "{}_prep_data.npy".format(base_path)
     args.partfile = "{}_part".format(base_path)
 
     samples = []
