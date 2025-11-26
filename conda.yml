@@ -1,0 +1,15 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - setuptools
+  - pandas
+  - python >=3.6
+  - pysam ==0.22
+  - scipy ==1.13
+  - scikit-learn ==1.4
+  - numpy ==1.26
+  - r-jsonlite ==1.8.8
+  - r-png
+  - bioconductor-dnacopy ==1.76
+  - matplotlib-base ==3.8.4
