@@ -6,4 +6,6 @@ __pycache__
 wisecondorx.egg-info/
 /build/
 /dist/
-**.pyc
+**.pyc# pixi environments
+.pixi/*
+!.pixi/config.toml

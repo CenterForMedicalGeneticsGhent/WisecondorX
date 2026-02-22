@@ -15,3 +15,12 @@ exclude = '''
   | dist
 )/
 '''
+[tool.pixi.workspace]
+name = "WisecondorX"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64", "osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+WisecondorX = { path = ".", editable = true }
+
+[tool.pixi.tasks]
