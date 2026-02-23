@@ -1,5 +1,8 @@
 # WisecondorX
 
+from typing import Dict, Any, List, Tuple, Union
+import numpy as np
+
 from wisecondorx.predict_tools import (
     coverage_normalize_and_mask,
     project_pc,
@@ -18,7 +21,12 @@ normalization strategies:
 """
 
 
-def normalize(args, sample, ref_file, ref_gender):
+def normalize(
+    maskrepeats: int,
+    sample: Dict[str, np.ndarray],
+    ref_file: Dict[str, Any],
+    ref_gender: str,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float]:
     if ref_gender == "A":
         ap = ""
         cp = 0
@@ -31,7 +39,7 @@ def normalize(args, sample, ref_file, ref_gender):
     sample = coverage_normalize_and_mask(sample, ref_file, ap)
     sample = project_pc(sample, ref_file, ap)
     results_w = get_weights(ref_file, ap)[ct:]
-    optimal_cutoff = get_optimal_cutoff(ref_file, args.maskrepeats)
+    optimal_cutoff = get_optimal_cutoff(ref_file, maskrepeats)
     results_z, results_r, ref_sizes, m_lr, m_z = normalize_repeat(
         sample, ref_file, optimal_cutoff, ct, cp, ap
     )
@@ -46,8 +54,13 @@ information are set to 0.
 """
 
 
-def get_post_processed_result(args, result, ref_sizes, rem_input):
-    infinite_mask = ref_sizes < args.minrefbins
+def get_post_processed_result(
+    minrefbins: int,
+    result: np.ndarray,
+    ref_sizes: np.ndarray,
+    rem_input: Dict[str, Any],
+) -> List[List[Union[float, int]]]:
+    infinite_mask = ref_sizes < minrefbins
     result[infinite_mask] = 0
     inflated_results = inflate_results(result, rem_input)
 

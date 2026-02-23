@@ -3,6 +3,7 @@
 import bisect
 import logging
 import random
+from typing import List, Tuple, Optional
 
 import numpy as np
 from scipy.signal import argrelextrema
@@ -18,7 +19,11 @@ serve as the cut-off point.
 """
 
 
-def train_gender_model(args, samples):
+def train_gender_model(
+    samples: np.ndarray,
+    yfrac: Optional[float] = None,
+    plotyfrac: Optional[str] = None,
+) -> Tuple[List[str], float]:
     genders = np.empty(len(samples), dtype="object")
     y_fractions = []
     for sample in samples:
@@ -39,7 +44,7 @@ def train_gender_model(args, samples):
     gmm_x = np.linspace(0, 0.02, 5000)
     gmm_y = np.exp(gmm.score_samples(gmm_x.reshape(-1, 1)))
 
-    if args.plotyfrac is not None:
+    if plotyfrac is not None:
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots(figsize=(16, 6))
@@ -47,12 +52,12 @@ def train_gender_model(args, samples):
         ax.plot(gmm_x, gmm_y, "r-", label="Gaussian mixture fit")
         ax.set_xlim([0, 0.02])
         ax.legend(loc="best")
-        plt.savefig(args.plotyfrac)
-        logging.info("Image written to {}, now quitting ...".format(args.plotyfrac))
+        plt.savefig(plotyfrac)
+        logging.info("Image written to {}, now quitting ...".format(plotyfrac))
         exit()
 
-    if args.yfrac is not None:
-        cut_off = args.yfrac
+    if yfrac is not None:
+        cut_off = yfrac
     else:
         sort_idd = np.argsort(gmm_x)
         sorted_gmm_y = gmm_y[sort_idd]
@@ -60,7 +65,9 @@ def train_gender_model(args, samples):
         local_min_i = argrelextrema(sorted_gmm_y, np.less)
 
         cut_off = gmm_x[local_min_i][0]
-        logging.info("Determined --yfrac cutoff: {}".format(str(round(cut_off, 4))))
+        logging.info(
+            "Determined --yfrac cutoff: {}".format(str(round(cut_off, 4)))
+        )
 
     genders[y_fractions > cut_off] = "M"
     genders[y_fractions < cut_off] = "F"
@@ -74,7 +81,7 @@ subset 'samples'.
 """
 
 
-def get_mask(samples):
+def get_mask(samples: np.ndarray) -> Tuple[np.ndarray, List[int]]:
     by_chr = []
     bins_per_chr = []
     sample_count = len(samples)
@@ -104,7 +111,9 @@ Normalizes samples for read depth and applies mask.
 """
 
 
-def normalize_and_mask(samples, chrs, mask):
+def normalize_and_mask(
+    samples: np.ndarray, chrs: List[int], mask: np.ndarray
+) -> np.ndarray:
     by_chr = []
     sample_count = len(samples)
 
@@ -132,7 +141,9 @@ between sample normalization in the test phase.
 """
 
 
-def train_pca(ref_data, pcacomp=5):
+def train_pca(
+    ref_data: np.ndarray, pcacomp: int = 5
+) -> Tuple[np.ndarray, PCA]:
     t_data = ref_data.T
     pca = PCA(n_components=pcacomp)
     pca.fit(t_data)
@@ -150,13 +161,13 @@ Calculates within-sample reference.
 
 
 def get_reference(
-    pca_corrected_data,
-    masked_bins_per_chr,
-    masked_bins_per_chr_cum,
-    ref_size,
-    part,
-    split_parts,
-):
+    pca_corrected_data: np.ndarray,
+    masked_bins_per_chr: List[int],
+    masked_bins_per_chr_cum: List[int],
+    ref_size: int,
+    part: int,
+    split_parts: int,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     big_indexes = []
     big_distances = []
 
@@ -223,7 +234,9 @@ def get_reference(
     return index_array, distance_array, null_ratio_array
 
 
-def _split_by_chr(start, end, chr_bin_sums):
+def _split_by_chr(
+    start: int, end: int, chr_bin_sums: List[int]
+) -> List[List[int]]:
     areas = []
     tmp = [0, start, 0]
     for i, val in enumerate(chr_bin_sums):
@@ -240,7 +253,7 @@ def _split_by_chr(start, end, chr_bin_sums):
     return areas
 
 
-def _get_part(partnum, outof, bincount):
+def _get_part(partnum: int, outof: int, bincount: int) -> Tuple[int, int]:
     start_bin = int(bincount / float(outof) * partnum)
     end_bin = int(bincount / float(outof) * (partnum + 1))
     return start_bin, end_bin
@@ -251,12 +264,20 @@ Calculates within-sample reference for a particular chromosome.
 """
 
 
-def get_ref_for_bins(ref_size, start, end, pca_corrected_data, chr_data):
+def get_ref_for_bins(
+    ref_size: int,
+    start: int,
+    end: int,
+    pca_corrected_data: np.ndarray,
+    chr_data: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
     find_pos = bisect.bisect
     ref_indexes = np.zeros((end - start, ref_size), dtype=np.int32)
     ref_distances = np.ones((end - start, ref_size))
     for this_bin in range(start, end):
-        this_mask = np.sum(np.power(chr_data - pca_corrected_data[this_bin, :], 2), 1)
+        this_mask = np.sum(
+            np.power(chr_data - pca_corrected_data[this_bin, :], 2), 1
+        )
         this_indexes = [-1 for i in range(ref_size)]
         this_distances = [1e10 for i in range(ref_size)]
         remove_index = this_indexes.pop

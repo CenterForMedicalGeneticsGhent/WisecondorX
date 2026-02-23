@@ -1,6 +1,7 @@
 # WisecondorX
 
 import os
+from typing import Dict, Any, List, Tuple, Optional, Union
 
 import numpy as np
 from scipy.stats import norm
@@ -14,7 +15,9 @@ model trained during newref phase.
 """
 
 
-def predict_gender(sample, trained_cutoff):
+def predict_gender(
+    sample: Dict[str, np.ndarray], trained_cutoff: float
+) -> str:
     Y_fraction = float(np.sum(sample["24"])) / float(
         np.sum([np.sum(sample[x]) for x in sample.keys()])
     )
@@ -29,13 +32,17 @@ Normalize sample for read depth and apply mask.
 """
 
 
-def coverage_normalize_and_mask(sample, ref_file, ap):
+def coverage_normalize_and_mask(
+    sample: Dict[str, np.ndarray], ref_file: Dict[str, Any], ap: str
+) -> np.ndarray:
     by_chr = []
 
     chrs = range(1, len(ref_file["bins_per_chr{}".format(ap)]) + 1)
 
     for chr in chrs:
-        this_chr = np.zeros(ref_file["bins_per_chr{}".format(ap)][chr - 1], dtype=float)
+        this_chr = np.zeros(
+            ref_file["bins_per_chr{}".format(ap)][chr - 1], dtype=float
+        )
         min_len = min(
             ref_file["bins_per_chr{}".format(ap)][chr - 1],
             len(sample[str(chr)]),
@@ -54,7 +61,9 @@ Project test sample to PCA space.
 """
 
 
-def project_pc(sample_data, ref_file, ap):
+def project_pc(
+    sample_data: np.ndarray, ref_file: Dict[str, Any], ap: str
+) -> np.ndarray:
     pca = PCA(n_components=ref_file["pca_components{}".format(ap)].shape[0])
     pca.components_ = ref_file["pca_components{}".format(ap)]
     pca.mean_ = ref_file["pca_mean{}".format(ap)]
@@ -72,7 +81,7 @@ depending on the within reference distances.
 """
 
 
-def get_optimal_cutoff(ref_file, repeats):
+def get_optimal_cutoff(ref_file: Dict[str, Any], repeats: int) -> float:
     distances = ref_file["distances"]
     cutoff = float("inf")
     for i in range(0, repeats):
@@ -92,10 +101,17 @@ reference for the other bins.
 """
 
 
-def normalize_repeat(test_data, ref_file, optimal_cutoff, ct, cp, ap):
-    results_z = None
-    results_r = None
-    ref_sizes = None
+def normalize_repeat(
+    test_data: np.ndarray,
+    ref_file: Dict[str, Any],
+    optimal_cutoff: float,
+    ct: int,
+    cp: int,
+    ap: str,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
+    results_z: Optional[np.ndarray] = None
+    results_r: Optional[np.ndarray] = None
+    ref_sizes: Optional[np.ndarray] = None
     test_copy = np.copy(test_data)
     for i in range(3):
         results_z, results_r, ref_sizes = _normalize_once(
@@ -109,7 +125,15 @@ def normalize_repeat(test_data, ref_file, optimal_cutoff, ct, cp, ap):
     return results_z, results_r, ref_sizes, m_lr, m_z
 
 
-def _normalize_once(test_data, test_copy, ref_file, optimal_cutoff, ct, cp, ap):
+def _normalize_once(
+    test_data: np.ndarray,
+    test_copy: np.ndarray,
+    ref_file: Dict[str, Any],
+    optimal_cutoff: float,
+    ct: int,
+    cp: int,
+    ap: str,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     masked_bins_per_chr = ref_file["masked_bins_per_chr{}".format(ap)]
     masked_bins_per_chr_cum = ref_file["masked_bins_per_chr_cum{}".format(ap)]
     results_z = np.zeros(masked_bins_per_chr_cum[-1])[ct:]
@@ -125,7 +149,9 @@ def _normalize_once(test_data, test_copy, ref_file, optimal_cutoff, ct, cp, ap):
         end = masked_bins_per_chr_cum[chr]
         chr_data = np.concatenate(
             (
-                test_copy[: masked_bins_per_chr_cum[chr] - masked_bins_per_chr[chr]],
+                test_copy[
+                    : masked_bins_per_chr_cum[chr] - masked_bins_per_chr[chr]
+                ],
                 test_copy[masked_bins_per_chr_cum[chr] :],
             )
         )
@@ -150,8 +176,10 @@ CBS, Z-scoring and plotting.
 """
 
 
-def get_weights(ref_file, ap):
-    inverse_weights = [np.mean(np.sqrt(x)) for x in ref_file["distances{}".format(ap)]]
+def get_weights(ref_file: Dict[str, Any], ap: str) -> np.ndarray:
+    inverse_weights = [
+        np.mean(np.sqrt(x)) for x in ref_file["distances{}".format(ap)]
+    ]
     weights = np.array([1 / x for x in inverse_weights])
     return weights
 
@@ -161,7 +189,9 @@ Unmasks results array.
 """
 
 
-def inflate_results(results, rem_input):
+def inflate_results(
+    results: np.ndarray, rem_input: Dict[str, Any]
+) -> List[Union[float, int]]:
     temp = [0 for x in rem_input["mask"]]
     j = 0
     for i, val in enumerate(rem_input["mask"]):
@@ -178,7 +208,7 @@ and results_w are set to 0 (blacklist)).
 """
 
 
-def log_trans(results, log_r_median):
+def log_trans(results: Dict[str, Any], log_r_median: float) -> None:
     for chr in range(len(results["results_r"])):
         results["results_r"][chr] = np.log2(results["results_r"][chr])
 
@@ -191,7 +221,9 @@ def log_trans(results, log_r_median):
                 results["results_z"][c][i] = 0
                 results["results_w"][c][i] = 0
             if results["results_r"][c][i] != 0:
-                results["results_r"][c][i] = results["results_r"][c][i] - log_r_median
+                results["results_r"][c][i] = (
+                    results["results_r"][c][i] - log_r_median
+                )
 
 
 """
@@ -200,8 +232,12 @@ and results_w if requested.
 """
 
 
-def apply_blacklist(rem_input, results):
-    blacklist = _import_bed(rem_input)
+def apply_blacklist(
+    blacklist_path: Optional[str], binsize: int, results: Dict[str, Any]
+) -> None:
+    if not blacklist_path:
+        return
+    blacklist = _import_bed(blacklist_path, binsize)
 
     for chr in blacklist.keys():
         for s_e in blacklist[chr]:
@@ -215,9 +251,11 @@ def apply_blacklist(rem_input, results):
                 results["results_w"][chr][pos] = 0
 
 
-def _import_bed(rem_input):
+def _import_bed(
+    blacklist_path: str, binsize: int
+) -> Dict[int, List[List[int]]]:
     bed = {}
-    for line in open(rem_input["args"].blacklist):
+    for line in open(blacklist_path):
         chr_name, s, e = line.strip().split("\t")
         if chr_name[:3] == "chr":
             chr_name = chr_name[3:]
@@ -230,8 +268,8 @@ def _import_bed(rem_input):
             bed[chr] = []
         bed[chr].append(
             [
-                int(int(s) / rem_input["binsize"]),
-                int(int(e) / rem_input["binsize"]) + 1,
+                int(int(s) / binsize),
+                int(int(e) / binsize) + 1,
             ]
         )
     return bed
@@ -243,15 +281,23 @@ Calculates segmental zz-scores.
 """
 
 
-def exec_cbs(rem_input, results):
-    json_cbs_dir = os.path.abspath(rem_input["args"].outid + "_CBS_tmp")
+def exec_cbs(
+    outid: str,
+    alpha: float,
+    seed: int,
+    wd: str,
+    ref_gender: str,
+    binsize: int,
+    results: Dict[str, Any],
+) -> List[List[Any]]:
+    json_cbs_dir = os.path.abspath(outid + "_CBS_tmp")
 
     json_dict = {
-        "R_script": str("{}/include/CBS.R".format(rem_input["wd"])),
-        "ref_gender": str(rem_input["ref_gender"]),
-        "alpha": str(rem_input["args"].alpha),
-        "binsize": str(rem_input["binsize"]),
-        "seed": str(rem_input["args"].seed),
+        "R_script": str("{}/include/CBS.R".format(wd)),
+        "ref_gender": str(ref_gender),
+        "alpha": str(alpha),
+        "binsize": str(binsize),
+        "seed": str(seed),
         "results_r": results["results_r"],
         "results_w": results["results_w"],
         "infile": str("{}_01.json".format(json_cbs_dir)),
@@ -267,7 +313,9 @@ def exec_cbs(rem_input, results):
     return results_c
 
 
-def _get_processed_cbs(cbs_data):
+def _get_processed_cbs(
+    cbs_data: List[Dict[str, Union[str, float]]],
+) -> List[List[Any]]:
     results_c = []
     for i, segment in enumerate(cbs_data):
         chr = int(segment["chr"]) - 1

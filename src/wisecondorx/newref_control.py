@@ -1,10 +1,10 @@
 # WisecondorX
 
-import copy
 import logging
 import os
 import sys
 import time
+from typing import List, Optional
 
 import numpy as np
 from concurrent import futures
@@ -25,7 +25,15 @@ for XY gonosomes (if enough males are included).
 """
 
 
-def tool_newref_prep(args, samples, gender, mask, bins_per_chr):
+def tool_newref_prep(
+    prepdatafile: str,
+    prepfile: str,
+    binsize: int,
+    samples: np.ndarray,
+    gender: str,
+    mask: np.ndarray,
+    bins_per_chr: List[int],
+) -> None:
     if gender == "A":
         last_chr = 22
     elif gender == "F":
@@ -44,14 +52,15 @@ def tool_newref_prep(args, samples, gender, mask, bins_per_chr):
         for i, x in enumerate(bins_per_chr)
     ]
     masked_bins_per_chr_cum = [
-        sum(masked_bins_per_chr[: x + 1]) for x in range(len(masked_bins_per_chr))
+        sum(masked_bins_per_chr[: x + 1])
+        for x in range(len(masked_bins_per_chr))
     ]
 
-    np.save(args.prepdatafile, pca_corrected_data)
+    np.save(prepdatafile, pca_corrected_data)
 
     np.savez_compressed(
-        args.prepfile,
-        binsize=args.binsize,
+        prepfile,
+        binsize=binsize,
         gender=gender,
         mask=mask,
         bins_per_chr=bins_per_chr,
@@ -69,26 +78,40 @@ is processed by a separate thread.
 """
 
 
-def tool_newref_main(args, cpus):
-    pca_corrected_data = np.load(args.prepdatafile, mmap_mode="r")
+def tool_newref_main(
+    prepdatafile: str,
+    prepfile: str,
+    partfile: str,
+    tmpoutfile: str,
+    refsize: int,
+    cpus: int,
+    part: Optional[List[int]] = None,
+) -> None:
+    pca_corrected_data = np.load(prepdatafile, mmap_mode="r")
     if cpus != 1:
-        with futures.ThreadPoolExecutor(max_workers=args.cpus) as executor:
-            for part in range(1, cpus + 1):
-                this_args = copy.copy(args)
-                this_args.part = [part, cpus]
-                executor.submit(_tool_newref_part, this_args, pca_corrected_data)
+        with futures.ThreadPoolExecutor(max_workers=cpus) as executor:
+            for p in range(1, cpus + 1):
+                executor.submit(
+                    _tool_newref_part,
+                    prepfile,
+                    partfile,
+                    refsize,
+                    [p, cpus],
+                    pca_corrected_data,
+                )
             executor.shutdown(wait=True)
     else:
-        for part in range(1, cpus + 1):
-            args.part = [part, cpus]
-            _tool_newref_part(args, pca_corrected_data)
+        for p in range(1, cpus + 1):
+            _tool_newref_part(
+                prepfile, partfile, refsize, [p, cpus], pca_corrected_data
+            )
 
-    tool_newref_post(args, cpus)
+    tool_newref_post(prepfile, partfile, tmpoutfile, cpus)
 
-    os.remove(args.prepfile)
-    os.remove(args.prepdatafile)
-    for part in range(1, cpus + 1):
-        os.remove("{}_{}.npz".format(args.partfile, str(part)))
+    os.remove(prepfile)
+    os.remove(prepdatafile)
+    for p in range(1, cpus + 1):
+        os.remove("{}_{}.npz".format(partfile, str(p)))
 
 
 """
@@ -97,21 +120,27 @@ within-sample reference creation.
 """
 
 
-def _tool_newref_part(args, pca_corrected_data):
-    if args.part[0] > args.part[1]:
+def _tool_newref_part(
+    prepfile: str,
+    partfile: str,
+    refsize: int,
+    part: List[int],
+    pca_corrected_data: np.ndarray,
+) -> None:
+    if part[0] > part[1]:
         logging.critical(
             "Part should be smaller or equal to total parts:{} > {} is wrong".format(
-                args.part[0], args.part[1]
+                part[0], part[1]
             )
         )
         sys.exit()
-    if args.part[0] < 0:
+    if part[0] < 0:
         logging.critical(
-            "Part should be at least zero: {} < 0 is wrong".format(args.part[0])
+            "Part should be at least zero: {} < 0 is wrong".format(part[0])
         )
         sys.exit()
 
-    npzdata = np.load(args.prepfile, encoding="latin1", allow_pickle=True)
+    npzdata = np.load(prepfile, encoding="latin1", allow_pickle=True)
     masked_bins_per_chr = npzdata["masked_bins_per_chr"]
     masked_bins_per_chr_cum = npzdata["masked_bins_per_chr_cum"]
 
@@ -119,13 +148,13 @@ def _tool_newref_part(args, pca_corrected_data):
         pca_corrected_data,
         masked_bins_per_chr,
         masked_bins_per_chr_cum,
-        ref_size=args.refsize,
-        part=args.part[0],
-        split_parts=args.part[1],
+        ref_size=refsize,
+        part=part[0],
+        split_parts=part[1],
     )
 
     np.savez_compressed(
-        "{}_{}.npz".format(args.partfile, str(args.part[0])),
+        "{}_{}.npz".format(partfile, str(part[0])),
         indexes=indexes,
         distances=distances,
         null_ratios=null_ratios,
@@ -138,14 +167,16 @@ new temporary output file.
 """
 
 
-def tool_newref_post(args, cpus):
-    npzdata_prep = np.load(args.prepfile, encoding="latin1", allow_pickle=True)
+def tool_newref_post(
+    prepfile: str, partfile: str, tmpoutfile: str, cpus: int
+) -> None:
+    npzdata_prep = np.load(prepfile, encoding="latin1", allow_pickle=True)
 
     big_indexes = []
     big_distances = []
     big_null_ratios = []
-    for part in range(1, cpus + 1):
-        infile = "{}_{}.npz".format(args.partfile, str(part))
+    for p in range(1, cpus + 1):
+        infile = "{}_{}.npz".format(partfile, str(p))
         npzdata_part = np.load(infile, encoding="latin1")
         big_indexes.extend(npzdata_part["indexes"])
         big_distances.extend(npzdata_part["distances"])
@@ -156,7 +187,7 @@ def tool_newref_post(args, cpus):
     null_ratios = np.array(big_null_ratios)
 
     np.savez_compressed(
-        args.tmpoutfile,
+        tmpoutfile,
         binsize=npzdata_prep["binsize"].item(),
         gender=npzdata_prep["gender"].item(),
         mask=npzdata_prep["mask"],
@@ -177,7 +208,7 @@ This function, prevents OSError: [Errno 26] Text file busy...
 """
 
 
-def force_remove(file_id):
+def force_remove(file_id: str) -> None:
     attemp = 1
     while True:
         try:
@@ -199,7 +230,9 @@ reference file.
 """
 
 
-def tool_newref_merge(args, outfiles, trained_cutoff):
+def tool_newref_merge(
+    outfile: str, nipt: bool, outfiles: List[str], trained_cutoff: float
+) -> None:
     final_ref = {"has_female": False, "has_male": False}
     for file_id in outfiles:
         npz_file = np.load(file_id, encoding="latin1", allow_pickle=True)
@@ -214,6 +247,6 @@ def tool_newref_merge(args, outfiles, trained_cutoff):
             else:
                 final_ref[str(component)] = npz_file[component]
         force_remove(file_id)
-    final_ref["is_nipt"] = args.nipt
+    final_ref["is_nipt"] = nipt
     final_ref["trained_cutoff"] = trained_cutoff
-    np.savez_compressed(args.outfile, **final_ref)
+    np.savez_compressed(outfile, **final_ref)
