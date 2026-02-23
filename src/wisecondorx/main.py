@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import logging
 import warnings
 
@@ -7,7 +5,7 @@ import typer
 
 from wisecondorx.convert import wcx_convert
 from wisecondorx.newref import wcx_newref
-from wisecondorx.predict import wcx_gender, wcx_predict
+from wisecondorx.predict import wcx_sex, wcx_predict
 from wisecondorx import __version__
 
 VERSION: str = __version__
@@ -41,7 +39,7 @@ def main_callback(
 
 app.command(name="convert")(wcx_convert)
 app.command(name="newref")(wcx_newref)
-app.command(name="gender")(wcx_gender)
+app.command(name="sex")(wcx_sex)
 app.command(name="predict")(wcx_predict)
 
 if __name__ == "__main__":

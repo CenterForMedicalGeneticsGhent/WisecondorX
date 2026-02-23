@@ -9,24 +9,6 @@ import numpy as np
 import pysam
 import typer
 from pathlib import Path
-from dataclasses import dataclass
-
-"""
-Converts aligned reads file to numpy array by transforming
-individual reads to counts per bin.
-"""
-
-
-@dataclass
-class BamQualityInfo:
-    mapped: int
-    unmapped: int
-    no_coordinate: int
-    filter_rmdup: int
-    filter_mapq: int
-    pre_retro: int
-    post_retro: int
-    pair_fail: int
 
 
 def wcx_convert(
@@ -156,16 +138,16 @@ def wcx_convert(
         reads_per_chromosome_bin[chr_name] = counts
         reads_kept += sum(counts)
 
-    qual_info = BamQualityInfo(
-        mapped=reads_file.mapped,
-        unmapped=reads_file.unmapped,
-        no_coordinate=reads_file.nocoordinate,
-        filter_rmdup=reads_rmdup,
-        filter_mapq=reads_mapq,
-        pre_retro=reads_seen,
-        post_retro=reads_kept,
-        pair_fail=reads_pairf,
-    )
+    qual_info: dict[str, int] = {
+        "mapped": reads_file.mapped,
+        "unmapped": reads_file.unmapped,
+        "no_coordinate": reads_file.nocoordinate,
+        "filter_rmdup": reads_rmdup,
+        "filter_mapq": reads_mapq,
+        "pre_retro": reads_seen,
+        "post_retro": reads_kept,
+        "pair_fail": reads_pairf,
+    }
 
     np.savez_compressed(
         outfile,

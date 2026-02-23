@@ -1,5 +1,3 @@
-# WisecondorX
-
 import bisect
 import logging
 import random
@@ -16,250 +14,7 @@ from sklearn.decomposition import PCA
 from sklearn.mixture import GaussianMixture
 import typer
 
-from wisecondorx.utils import scale_sample, gender_correct
-
-
-def tool_newref_prep(
-    prepdatafile: str,
-    prepfile: str,
-    binsize: int,
-    samples: np.ndarray,
-    gender: str,
-    mask: np.ndarray,
-    bins_per_chr: list[int],
-) -> None:
-    from wisecondorx.newref_tools import (
-        normalize_and_mask,
-        train_pca,
-    )
-
-    if gender == "A":
-        last_chr = 22
-    elif gender == "F":
-        last_chr = 23
-    else:
-        last_chr = 24
-
-    bins_per_chr = bins_per_chr[:last_chr]
-    mask = mask[: np.sum(bins_per_chr)]
-
-    masked_data = normalize_and_mask(samples, range(1, last_chr + 1), mask)
-    pca_corrected_data, pca = train_pca(masked_data)
-
-    masked_bins_per_chr = [
-        sum(mask[sum(bins_per_chr[:i]) : sum(bins_per_chr[:i]) + x])
-        for i, x in enumerate(bins_per_chr)
-    ]
-    masked_bins_per_chr_cum = [
-        sum(masked_bins_per_chr[: x + 1])
-        for x in range(len(masked_bins_per_chr))
-    ]
-
-    np.save(prepdatafile, pca_corrected_data)
-
-    np.savez_compressed(
-        prepfile,
-        binsize=binsize,
-        gender=gender,
-        mask=mask,
-        bins_per_chr=bins_per_chr,
-        masked_bins_per_chr=masked_bins_per_chr,
-        masked_bins_per_chr_cum=masked_bins_per_chr_cum,
-        pca_components=pca.components_,
-        pca_mean=pca.mean_,
-    )
-
-
-"""
-Prepares subfiles if multi-threading is requested.
-Main file is split in 'cpus' subfiles, each subfile
-is processed by a separate thread.
-"""
-
-
-def tool_newref_main(
-    prepdatafile: str,
-    prepfile: str,
-    partfile: str,
-    tmpoutfile: str,
-    refsize: int,
-    cpus: int,
-    part: Optional[list[int]] = None,
-) -> None:
-    pca_corrected_data = np.load(prepdatafile, mmap_mode="r")
-    if cpus != 1:
-        with futures.ThreadPoolExecutor(max_workers=cpus) as executor:
-            for p in range(1, cpus + 1):
-                executor.submit(
-                    _tool_newref_part,
-                    prepfile,
-                    partfile,
-                    refsize,
-                    [p, cpus],
-                    pca_corrected_data,
-                )
-            executor.shutdown(wait=True)
-    else:
-        for p in range(1, cpus + 1):
-            _tool_newref_part(
-                prepfile, partfile, refsize, [p, cpus], pca_corrected_data
-            )
-
-    tool_newref_post(prepfile, partfile, tmpoutfile, cpus)
-
-    os.remove(prepfile)
-    os.remove(prepdatafile)
-    for p in range(1, cpus + 1):
-        os.remove("{}_{}.npz".format(partfile, str(p)))
-
-
-"""
-Function executed once for each thread. Controls
-within-sample reference creation.
-"""
-
-
-def _tool_newref_part(
-    prepfile: str,
-    partfile: str,
-    refsize: int,
-    part: list[int],
-    pca_corrected_data: np.ndarray,
-) -> None:
-    from wisecondorx.newref_tools import get_reference
-
-    if part[0] > part[1]:
-        logging.critical(
-            "Part should be smaller or equal to total parts:{} > {} is wrong".format(
-                part[0], part[1]
-            )
-        )
-        sys.exit()
-    if part[0] < 0:
-        logging.critical(
-            "Part should be at least zero: {} < 0 is wrong".format(part[0])
-        )
-        sys.exit()
-
-    npzdata = np.load(prepfile, encoding="latin1", allow_pickle=True)
-    masked_bins_per_chr = npzdata["masked_bins_per_chr"]
-    masked_bins_per_chr_cum = npzdata["masked_bins_per_chr_cum"]
-
-    indexes, distances, null_ratios = get_reference(
-        pca_corrected_data,
-        masked_bins_per_chr,
-        masked_bins_per_chr_cum,
-        ref_size=refsize,
-        part=part[0],
-        split_parts=part[1],
-    )
-
-    np.savez_compressed(
-        "{}_{}.npz".format(partfile, str(part[0])),
-        indexes=indexes,
-        distances=distances,
-        null_ratios=null_ratios,
-    )
-
-
-"""
-Merges separate subfiles (one for each thread) to a
-new temporary output file.
-"""
-
-
-def tool_newref_post(
-    prepfile: str, partfile: str, tmpoutfile: str, cpus: int
-) -> None:
-    npzdata_prep = np.load(prepfile, encoding="latin1", allow_pickle=True)
-
-    big_indexes = []
-    big_distances = []
-    big_null_ratios = []
-    for p in range(1, cpus + 1):
-        infile = "{}_{}.npz".format(partfile, str(p))
-        npzdata_part = np.load(infile, encoding="latin1")
-        big_indexes.extend(npzdata_part["indexes"])
-        big_distances.extend(npzdata_part["distances"])
-        big_null_ratios.extend(npzdata_part["null_ratios"])
-
-    indexes = np.array(big_indexes)
-    distances = np.array(big_distances)
-    null_ratios = np.array(big_null_ratios)
-
-    np.savez_compressed(
-        tmpoutfile,
-        binsize=npzdata_prep["binsize"].item(),
-        gender=npzdata_prep["gender"].item(),
-        mask=npzdata_prep["mask"],
-        bins_per_chr=npzdata_prep["bins_per_chr"],
-        masked_bins_per_chr=npzdata_prep["masked_bins_per_chr"],
-        masked_bins_per_chr_cum=npzdata_prep["masked_bins_per_chr_cum"],
-        pca_components=npzdata_prep["pca_components"],
-        pca_mean=npzdata_prep["pca_mean"],
-        indexes=indexes,
-        distances=distances,
-        null_ratios=null_ratios,
-    )
-
-
-"""
-Tries to remove text file, when it is busy, until becomes successful.
-This function, prevents OSError: [Errno 26] Text file busy...
-"""
-
-
-def force_remove(file_id: str) -> None:
-    attemp = 1
-    while True:
-        try:
-            os.remove(file_id)
-            break
-        except Exception:
-            print(
-                "Attemp #{}: Cannot remove {}, because it is busy, trying again...".format(
-                    attemp, file_id
-                )
-            )
-            attemp = attemp + 1
-            time.sleep(5)
-
-
-"""
-Merges separate subfiles (A, F, M) to one final
-reference file.
-"""
-
-
-def tool_newref_merge(
-    outfile: str, nipt: bool, outfiles: list[str], trained_cutoff: float
-) -> None:
-    final_ref = {"has_female": False, "has_male": False}
-    for file_id in outfiles:
-        npz_file = np.load(file_id, encoding="latin1", allow_pickle=True)
-        gender = str(npz_file["gender"])
-        for component in [x for x in npz_file.keys() if x != "gender"]:
-            if gender == "F":
-                final_ref["has_female"] = True
-                final_ref["{}.F".format(str(component))] = npz_file[component]
-            elif gender == "M":
-                final_ref["has_male"] = True
-                final_ref["{}.M".format(str(component))] = npz_file[component]
-            else:
-                final_ref[str(component)] = npz_file[component]
-        force_remove(file_id)
-    final_ref["is_nipt"] = nipt
-    final_ref["trained_cutoff"] = trained_cutoff
-    np.savez_compressed(outfile, **final_ref)
-
-
-"""
-A Gaussian mixture model is fitted against
-all one-dimensional reference y-fractions.
-Two components are expected: one for males,
-and one for females. The local minimum will
-serve as the cut-off point.
-"""
+from wisecondorx.utils import scale_sample, sex_correct
 
 
 def wcx_newref(
@@ -275,14 +30,15 @@ def wcx_newref(
     yfrac: Annotated[
         float,
         typer.Option(
+            "--yfrac",
             min=0.0,
             max=1.0,
-            help="Use to manually set the Y read fraction cutoff, which defines gender",
+            help="Use to manually set the Y read fraction cutoff, which defines sex",
         ),
     ] = None,
-    plotyfrac: Path = typer.Option(
+    yfracplot: Path = typer.Option(
         None,
-        "--plotyfrac",
+        "--yfracplot",
         help="Path to yfrac .png plot for optimization; software will stop after plotting",
     ),
     refsize: int = typer.Option(
@@ -319,11 +75,11 @@ def wcx_newref(
         samples.append(scale_sample(sample, source_binsize, target_binsize))
 
     samples_array = np.array(samples)
-    genders, trained_cutoff = train_gender_model(
-        samples=samples_array, yfrac=yfrac, plotyfrac=plotyfrac
+    sexes, trained_cutoff = train_sex_model(
+        samples=samples_array, yfrac=yfrac, plotyfrac=yfracplot
     )
 
-    if genders.count("F") < 5 and nipt:
+    if sexes.count("F") < 5 and nipt:
         logging.warning(
             "A NIPT reference should have at least 5 female feti samples. Removing --nipt flag."
         )
@@ -331,19 +87,19 @@ def wcx_newref(
 
     if not nipt:
         for i, sample in enumerate(samples_array):
-            samples_array[i] = gender_correct(sample, genders[i])
+            samples_array[i] = sex_correct(sample, sexes[i])
 
     total_mask, bins_per_chr = get_mask(samples_array)
-    if genders.count("F") > 4:
-        mask_F, _ = get_mask(samples_array[np.array(genders) == "F"])
+    if sexes.count("F") > 4:
+        mask_F, _ = get_mask(samples_array[np.array(sexes) == "F"])
         total_mask = total_mask & mask_F
-    if genders.count("M") > 4 and not nipt:
-        mask_M, _ = get_mask(samples_array[np.array(genders) == "M"])
+    if sexes.count("M") > 4 and not nipt:
+        mask_M, _ = get_mask(samples_array[np.array(sexes) == "M"])
         total_mask = total_mask & mask_M
 
     outfiles_list: list[str] = []
 
-    if len(genders) > 9:
+    if len(sexes) > 9:
         logging.info("Starting autosomal reference creation ...")
         outfiles_list.append(tmpoutfile_A)
         tool_newref_prep(
@@ -351,7 +107,7 @@ def wcx_newref(
             prepfile=prepfile,
             binsize=target_binsize,
             samples=samples_array,
-            gender="A",
+            sex="A",
             mask=total_mask,
             bins_per_chr=bins_per_chr,
         )
@@ -370,15 +126,15 @@ def wcx_newref(
         )
         sys.exit(1)
 
-    if genders.count("F") > 4:
+    if sexes.count("F") > 4:
         logging.info("Starting female gonosomal reference creation ...")
         outfiles_list.append(tmpoutfile_F)
         tool_newref_prep(
             prepdatafile=prepdatafile,
             prepfile=prepfile,
             binsize=target_binsize,
-            samples=samples_array[np.array(genders) == "F"],
-            gender="F",
+            samples=samples_array[np.array(sexes) == "F"],
+            sex="F",
             mask=total_mask,
             bins_per_chr=bins_per_chr,
         )
@@ -397,15 +153,15 @@ def wcx_newref(
         )
 
     if not nipt:
-        if genders.count("M") > 4:
+        if sexes.count("M") > 4:
             logging.info("Starting male gonosomal reference creation ...")
             outfiles_list.append(tmpoutfile_M)
             tool_newref_prep(
                 prepdatafile=prepdatafile,
                 prepfile=prepfile,
                 binsize=target_binsize,
-                samples=samples_array[np.array(genders) == "M"],
-                gender="M",
+                samples=samples_array[np.array(sexes) == "M"],
+                sex="M",
                 mask=total_mask,
                 bins_per_chr=bins_per_chr,
             )
@@ -432,12 +188,236 @@ def wcx_newref(
     logging.info("Finished creating reference")
 
 
-def train_gender_model(
+def tool_newref_prep(
+    prepdatafile: str,
+    prepfile: str,
+    binsize: int,
+    samples: np.ndarray,
+    sex: str,
+    mask: np.ndarray,
+    bins_per_chr: list[int],
+) -> None:
+    if sex == "A":
+        last_chr = 22
+    elif sex == "F":
+        last_chr = 23
+    else:
+        last_chr = 24
+
+    bins_per_chr = bins_per_chr[:last_chr]
+    mask = mask[: np.sum(bins_per_chr)]
+
+    masked_data = normalize_and_mask(samples, range(1, last_chr + 1), mask)
+    pca_corrected_data, pca = train_pca(masked_data)
+
+    masked_bins_per_chr = [
+        sum(mask[sum(bins_per_chr[:i]) : sum(bins_per_chr[:i]) + x])
+        for i, x in enumerate(bins_per_chr)
+    ]
+    masked_bins_per_chr_cum = [
+        sum(masked_bins_per_chr[: x + 1])
+        for x in range(len(masked_bins_per_chr))
+    ]
+
+    np.save(prepdatafile, pca_corrected_data)
+
+    np.savez_compressed(
+        prepfile,
+        binsize=binsize,
+        gender=sex,
+        mask=mask,
+        bins_per_chr=bins_per_chr,
+        masked_bins_per_chr=masked_bins_per_chr,
+        masked_bins_per_chr_cum=masked_bins_per_chr_cum,
+        pca_components=pca.components_,
+        pca_mean=pca.mean_,
+    )
+
+
+def tool_newref_main(
+    prepdatafile: str,
+    prepfile: str,
+    partfile: str,
+    tmpoutfile: str,
+    refsize: int,
+    cpus: int,
+    part: Optional[list[int]] = None,
+) -> None:
+    """
+    Prepares subfiles if multi-threading is requested.
+    Main file is split in 'cpus' subfiles, each subfile
+    is processed by a separate thread.
+    """
+    pca_corrected_data = np.load(prepdatafile, mmap_mode="r")
+    if cpus != 1:
+        with futures.ThreadPoolExecutor(max_workers=cpus) as executor:
+            for p in range(1, cpus + 1):
+                executor.submit(
+                    _tool_newref_part,
+                    prepfile,
+                    partfile,
+                    refsize,
+                    [p, cpus],
+                    pca_corrected_data,
+                )
+            executor.shutdown(wait=True)
+    else:
+        for p in range(1, cpus + 1):
+            _tool_newref_part(
+                prepfile, partfile, refsize, [p, cpus], pca_corrected_data
+            )
+
+    tool_newref_post(prepfile, partfile, tmpoutfile, cpus)
+
+    os.remove(prepfile)
+    os.remove(prepdatafile)
+    for p in range(1, cpus + 1):
+        os.remove("{}_{}.npz".format(partfile, str(p)))
+
+
+def _tool_newref_part(
+    prepfile: str,
+    partfile: str,
+    refsize: int,
+    part: list[int],
+    pca_corrected_data: np.ndarray,
+) -> None:
+    """
+    Function executed once for each thread. Controls
+    within-sample reference creation.
+    """
+    if part[0] > part[1]:
+        logging.critical(
+            "Part should be smaller or equal to total parts:{} > {} is wrong".format(
+                part[0], part[1]
+            )
+        )
+        sys.exit()
+    if part[0] < 0:
+        logging.critical(
+            "Part should be at least zero: {} < 0 is wrong".format(part[0])
+        )
+        sys.exit()
+
+    npzdata = np.load(prepfile, encoding="latin1", allow_pickle=True)
+    masked_bins_per_chr = npzdata["masked_bins_per_chr"]
+    masked_bins_per_chr_cum = npzdata["masked_bins_per_chr_cum"]
+
+    indexes, distances, null_ratios = get_reference(
+        pca_corrected_data,
+        masked_bins_per_chr,
+        masked_bins_per_chr_cum,
+        ref_size=refsize,
+        part=part[0],
+        split_parts=part[1],
+    )
+
+    np.savez_compressed(
+        "{}_{}.npz".format(partfile, str(part[0])),
+        indexes=indexes,
+        distances=distances,
+        null_ratios=null_ratios,
+    )
+
+
+def tool_newref_post(
+    prepfile: str, partfile: str, tmpoutfile: str, cpus: int
+) -> None:
+    """
+    Merges separate subfiles (one for each thread) to a
+    new temporary output file.
+    """
+    npzdata_prep = np.load(prepfile, encoding="latin1", allow_pickle=True)
+
+    big_indexes = []
+    big_distances = []
+    big_null_ratios = []
+    for p in range(1, cpus + 1):
+        infile = "{}_{}.npz".format(partfile, str(p))
+        npzdata_part = np.load(infile, encoding="latin1")
+        big_indexes.extend(npzdata_part["indexes"])
+        big_distances.extend(npzdata_part["distances"])
+        big_null_ratios.extend(npzdata_part["null_ratios"])
+
+    indexes = np.array(big_indexes)
+    distances = np.array(big_distances)
+    null_ratios = np.array(big_null_ratios)
+
+    np.savez_compressed(
+        tmpoutfile,
+        binsize=npzdata_prep["binsize"].item(),
+        gender=npzdata_prep["gender"].item(),
+        mask=npzdata_prep["mask"],
+        bins_per_chr=npzdata_prep["bins_per_chr"],
+        masked_bins_per_chr=npzdata_prep["masked_bins_per_chr"],
+        masked_bins_per_chr_cum=npzdata_prep["masked_bins_per_chr_cum"],
+        pca_components=npzdata_prep["pca_components"],
+        pca_mean=npzdata_prep["pca_mean"],
+        indexes=indexes,
+        distances=distances,
+        null_ratios=null_ratios,
+    )
+
+
+def force_remove(file_id: Path) -> None:
+    """
+    Tries to remove text file, when it is busy, until becomes successful.
+    This function, prevents OSError: [Errno 26] Text file busy...
+    """
+    attemp = 1
+    while True:
+        try:
+            os.remove(file_id)
+            break
+        except Exception:
+            print(
+                "Attemp #{}: Cannot remove {}, because it is busy, trying again...".format(
+                    attemp, file_id
+                )
+            )
+            attemp = attemp + 1
+            time.sleep(5)
+
+
+def tool_newref_merge(
+    outfile: str, nipt: bool, outfiles: list[str], trained_cutoff: float
+) -> None:
+    """
+    Merges separate subfiles (A, F, M) to one final
+    reference file.
+    """
+    final_ref = {"has_female": False, "has_male": False}
+    for file_id in outfiles:
+        npz_file = np.load(file_id, encoding="latin1", allow_pickle=True)
+        sex = str(npz_file["gender"])
+        for component in [x for x in npz_file.keys() if x != "gender"]:
+            if sex == "F":
+                final_ref["has_female"] = True
+                final_ref["{}.F".format(str(component))] = npz_file[component]
+            elif sex == "M":
+                final_ref["has_male"] = True
+                final_ref["{}.M".format(str(component))] = npz_file[component]
+            else:
+                final_ref[str(component)] = npz_file[component]
+        force_remove(file_id)
+    final_ref["is_nipt"] = nipt
+    final_ref["trained_cutoff"] = trained_cutoff
+    np.savez_compressed(outfile, **final_ref)
+
+
+def train_sex_model(
     samples: np.ndarray,
     yfrac: float = None,
-    plotyfrac: str = None,
+    plotyfrac: Path = None,
 ) -> tuple[list[str], float]:
-    genders = np.empty(len(samples), dtype="object")
+    """
+    A Gaussian mixture model is fitted against
+    all one-dimensional reference y-fractions.
+    Two components are expected: one for males,
+    and one for females. The local minimum will
+    serve as the cut-off point.
+    """
+    sexes = np.empty(len(samples), dtype="object")
     y_fractions = []
     for sample in samples:
         y_fractions.append(
@@ -482,19 +462,17 @@ def train_gender_model(
             "Determined --yfrac cutoff: {}".format(str(round(cut_off, 4)))
         )
 
-    genders[y_fractions > cut_off] = "M"
-    genders[y_fractions < cut_off] = "F"
+    sexes[y_fractions > cut_off] = "M"
+    sexes[y_fractions < cut_off] = "F"
 
-    return genders.tolist(), cut_off
-
-
-"""
-Finds mask (locations of bins without data) in the
-subset 'samples'.
-"""
+    return sexes.tolist(), cut_off
 
 
 def get_mask(samples: np.ndarray) -> tuple[np.ndarray, list[int]]:
+    """
+    Finds mask (locations of bins without data) in the
+    subset 'samples'.
+    """
     by_chr = []
     bins_per_chr = []
     sample_count = len(samples)
@@ -519,17 +497,14 @@ def get_mask(samples: np.ndarray) -> tuple[np.ndarray, list[int]]:
     return mask, bins_per_chr
 
 
-"""
-Normalizes samples for read depth and applies mask.
-"""
-
-
 def normalize_and_mask(
     samples: np.ndarray, chrs: list[int], mask: np.ndarray
 ) -> np.ndarray:
     by_chr = []
     sample_count = len(samples)
-
+    """
+    Normalizes samples for read depth and applies mask.
+    """
     for chr in chrs:
         max_len = max([sample[str(chr)].shape[0] for sample in samples])
         this_chr = np.zeros((max_len, sample_count), dtype=float)
@@ -548,15 +523,13 @@ def normalize_and_mask(
     return masked_data
 
 
-"""
-Executes PCA. Rotations are saved which enable
-between sample normalization in the test phase.
-"""
-
-
 def train_pca(
     ref_data: np.ndarray, pcacomp: int = 5
 ) -> tuple[np.ndarray, PCA]:
+    """
+    Executes PCA. Rotations are saved which enable
+    between sample normalization in the test phase.
+    """
     t_data = ref_data.T
     pca = PCA(n_components=pcacomp)
     pca.fit(t_data)
@@ -568,11 +541,6 @@ def train_pca(
     return corrected.T, pca
 
 
-"""
-Calculates within-sample reference.
-"""
-
-
 def get_reference(
     pca_corrected_data: np.ndarray,
     masked_bins_per_chr: list[int],
@@ -581,6 +549,9 @@ def get_reference(
     part: int,
     split_parts: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Calculates within-sample reference.
+    """
     big_indexes = []
     big_distances = []
 
@@ -672,11 +643,6 @@ def _get_part(partnum: int, outof: int, bincount: int) -> tuple[int, int]:
     return start_bin, end_bin
 
 
-"""
-Calculates within-sample reference for a particular chromosome.
-"""
-
-
 def get_ref_for_bins(
     ref_size: int,
     start: int,
@@ -684,6 +650,9 @@ def get_ref_for_bins(
     pca_corrected_data: np.ndarray,
     chr_data: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Calculates within-sample reference for a particular chromosome.
+    """
     find_pos = bisect.bisect
     ref_indexes = np.zeros((end - start, ref_size), dtype=np.int32)
     ref_distances = np.ones((end - start, ref_size))

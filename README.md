@@ -47,7 +47,7 @@ There are three main stages (converting, reference creating and predicting) when
 - Convert aligned reads to .npz files (for both reference and test samples)
 - Create a reference (using reference .npz files)
   - **Important notes**
-    - Automated gender prediction, required to consistently analyze sex chromosomes, is based on a Gaussian mixture
+    - Automated sex prediction, required to consistently analyze sex chromosomes, is based on a Gaussian mixture
       model. If few samples (<20) are included during reference creation, or not both male and female samples (for
       NIPT, this means male and female feti) are represented, this process might not be accurate. Therefore,
       alternatively, one can manually tweak the [`--yfrac`](#stage-2-create-reference) parameter.
@@ -84,7 +84,7 @@ WisecondorX newref reference_input_dir/*.npz reference_prefix [--optional argume
 | `--nipt`                       | **Always include this flag for the generation of a NIPT reference**                                                                         |
 | `--binsize x`                  | Size per bin in bp, defines the resolution of the output (default: x=1e5)                                                                   |
 | `--refsize x`                  | Amount of reference locations per target; should generally not be tweaked (default: x=300)                                                  |
-| `--yfrac x`                    | Y read fraction cutoff, in order to manually define gender. Setting this to 1 will treat all samples as female                              |
+| `--yfrac x`                    | Y read fraction cutoff, in order to manually define sex. Setting this to 1 will treat all samples as female                              |
 | `--plotyfrac x`                | plots Y read fraction histogram and Gaussian mixture fit to file x, can help when setting `--yfrac` manually; software quits after plotting |
 | `--cpus x`                     | Number of threads requested (default: x=1)                                                                                                  |
 
@@ -103,7 +103,7 @@ WisecondorX predict test_input.npz reference_input.npz output_id [--optional arg
 | `--alpha x`                    | P-value cutoff for calling circular binary segmentation breakpoints (default: x=1e-4)                                                                                                                                             |
 | `--beta x`                     | When beta is given, `--zscore` is ignored. Beta sets a ratio cutoff for aberration calling. It's a number between 0 (liberal) and 1 (conservative) and, when used, is optimally close to the purity (e.g. fetal/tumor fraction)   |
 | `--blacklist x`                | Blacklist for masking additional regions; requires headerless .bed file. This is particularly useful when the reference set is too small to recognize some obvious loci (such as centromeres; examples at `./example.blacklist/`) |
-| `--gender x`                   | Force WisecondorX to analyze this case as male (M) or female (F). Useful when e.g. dealing with a loss of chromosome Y, which causes erroneous gender predictions (choices: x=F or x=M)                                           |
+| `--sex x`                   | Force WisecondorX to analyze this case as male (M) or female (F). Useful when e.g. dealing with a loss of chromosome Y, which causes erroneous sex predictions (choices: x=F or x=M)                                           |
 | `--bed`                        | Outputs tab-delimited .bed files (trisomy 21 NIPT example at `./example.bed`), containing all necessary information                                                                                                      |
 | `--plot`                       | Outputs custom .png plots (trisomy 21 NIPT example at `./example.plot`), directly interpretable                                                                                                                          |
 | `--regions x`                   |  Mark custom regions on the plot; requires a headerless .bed file. (CNS tumor genes example at `./regions.example`)                                                                        |
@@ -115,10 +115,10 @@ WisecondorX predict test_input.npz reference_input.npz output_id [--optional arg
 
 ```bash
 
-WisecondorX gender test_input.npz reference_input.npz
+WisecondorX sex test_input.npz reference_input.npz
 ```
 
-Returns gender according to the reference.
+Returns sex according to the reference.
 
 # Parameters
 
@@ -130,8 +130,8 @@ sizes ranging from 50 to 500 kb.
 To understand the underlying algorithm, I highly recommend reading
 [Straver et al (2014)](https://www.ncbi.nlm.nih.gov/pubmed/24170809); and its update shortly introduced in
 [Huijsdens-van Amsterdam et al (2018)](https://www.nature.com/articles/gim201832.epdf). Numerous adaptations to this
-algorithm have been made, yet the central normalization principles remain. Changes include e.g. the inclusion of a gender
-prediction algorithm, gender handling prior to normalization (ultimately enabling X and Y predictions), between-sample
+algorithm have been made, yet the central normalization principles remain. Changes include e.g. the inclusion of a sex
+prediction algorithm, sex handling prior to normalization (ultimately enabling X and Y predictions), between-sample
 Z-scoring, inclusion of a weighted circular binary segmentation algorithm and improved codes for obtaining tables and
 plots.
 

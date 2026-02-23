@@ -1,27 +1,27 @@
-# WisecondorX
-
 import os
+import json
+import subprocess
+import math
 import sys
 from pathlib import Path
-from typing import Dict, Any, List, Tuple, Optional, Union
+from typing import Dict, Any, List, Tuple, Optional, Union, Annotated
 
 import numpy as np
+import pandas as pd
 from scipy.stats import norm
 import typer
 
 import re
 from wisecondorx.utils import (
-    exec_R,
-    get_z_score,
+    sex_correct,
     scale_sample,
-    gender_correct,
-    get_median_segment_variance,
-    get_cpa,
 )
+from wisecondorx.plotter import create_plots
+
 import logging
 
 
-def wcx_gender(
+def wcx_sex(
     infile: Path = typer.Argument(..., help=".npz input file"),
     reference: Path = typer.Argument(
         ..., help="Reference .npz, as previously created with newref"
@@ -46,7 +46,7 @@ def wcx_predict(
     reference: Path = typer.Argument(
         ..., help="Reference .npz, as previously created with newref"
     ),
-    outid: str = typer.Argument(
+    prefix: str = typer.Argument(
         ...,
         help="Basename (w/o extension) of output files (paths are allowed, e.g. path/to/ID_1)",
     ),
@@ -60,18 +60,27 @@ def wcx_predict(
         "--maskrepeats",
         help="Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.",
     ),
-    alpha: float = typer.Option(
-        1e-4, "--alpha", help="p-value cut-off for calling a CBS breakpoint."
-    ),
-    zscore: float = typer.Option(
-        5.0, "--zscore", help="z-score cut-off for aberration calling."
-    ),
-    beta: Optional[float] = typer.Option(
-        None,
-        "--beta",
-        help="When beta is given, --zscore is ignored and a ratio cut-off is used to call aberrations.",
-    ),
-    blacklist: Optional[str] = typer.Option(
+    alpha: Annotated[
+        float,
+        typer.Option(
+            min=0.0,
+            max=1.0,
+            help="p-value cut-off for calling a CBS breakpoint.",
+        ),
+    ] = 1e-4,
+    zscore: Annotated[
+        float,
+        typer.Option(help="z-score cut-off for aberration calling.", min=0.0),
+    ] = 5.0,
+    beta: Annotated[
+        float,
+        typer.Option(
+            min=0.0,
+            max=1.0,
+            help="When beta is given, --zscore is ignored and a ratio cut-off is used to call aberrations.",
+        ),
+    ] = None,
+    blacklist: Path = typer.Option(
         None,
         "--blacklist",
         help="Blacklist that masks regions in output, structure of header-less file: chr...(/t)startpos(/t)endpos(/n)",
@@ -120,25 +129,6 @@ def wcx_predict(
         )
         sys.exit(1)
 
-    if zscore <= 0:
-        logging.critical(
-            "Parameter --zscore should be a strictly positive number"
-        )
-        sys.exit(1)
-
-    if beta is not None:
-        if beta <= 0 or beta > 1:
-            logging.critical(
-                "Parameter --beta should be a strictly positive number lower than or equal to 1"
-            )
-            sys.exit(1)
-
-    if alpha <= 0 or alpha > 1:
-        logging.critical(
-            "Parameter --alpha should be a strictly positive number lower than or equal to 1"
-        )
-        sys.exit(1)
-
     logging.info("Importing data ...")
     ref_file = np.load(reference, encoding="latin1", allow_pickle=True)
     sample_file = np.load(infile, encoding="latin1", allow_pickle=True)
@@ -154,7 +144,7 @@ def wcx_predict(
     if not ref_file["is_nipt"]:
         if gender_override:
             gender = gender_override
-        sample = gender_correct(sample, gender)
+        sample = sex_correct(sample, gender)
         ref_gender = gender
     else:
         if gender_override:
@@ -196,7 +186,7 @@ def wcx_predict(
         ref_gender=ref_gender,
     )
 
-    wd = str(os.path.dirname(os.path.realpath(__file__)))
+    wd = os.getcwd()
     bpc = ref_file[f"bins_per_chr.{ref_gender}"]
     mbpc = ref_file[f"masked_bins_per_chr.{ref_gender}"]
     mbpcc = ref_file[f"masked_bins_per_chr_cum.{ref_gender}"]
@@ -253,7 +243,7 @@ def wcx_predict(
             rem_input=rem_input,
         )
 
-    log_trans(results, m_lr)
+    logtransform(results, m_lr)
 
     if blacklist:
         logging.info("Applying blacklist ...")
@@ -263,8 +253,10 @@ def wcx_predict(
 
     logging.info("Executing circular binary segmentation ...")
 
+    # results_c is a list of lists, where each inner list is a segment
+    # each segment is a list of 4 values: [chr, start, end, log2_ratio]
     results["results_c"] = exec_cbs(
-        outid=outid,
+        prefix=prefix,
         alpha=alpha,
         seed=seed,
         wd=wd,
@@ -276,7 +268,7 @@ def wcx_predict(
     if bed:
         logging.info("Writing tables ...")
         generate_output_tables(
-            outid=outid,
+            prefix=prefix,
             binsize=ref_binsize,
             regions=regions,
             bins_per_chr=bpc,
@@ -291,7 +283,7 @@ def wcx_predict(
     if plot:
         logging.info("Writing plots ...")
         exec_write_plots(
-            outid=outid,
+            prefix=prefix,
             wd=wd,
             ref_gender=ref_gender,
             beta=beta,
@@ -504,14 +496,12 @@ def inflate_results(
     return temp
 
 
-"""
-Log2-transforms results_r. If resulting elements are infinite,
-all corresponding possible positions (at results_r, results_z
-and results_w are set to 0 (blacklist)).
-"""
-
-
-def log_trans(results: Dict[str, Any], log_r_median: float) -> None:
+def logtransform(results: Dict[str, Any], log_r_median: float) -> None:
+    """
+    Log2-transforms results_r. If resulting elements are infinite,
+    all corresponding possible positions (at results_r, results_z
+    and results_w are set to 0 (blacklist)).
+    """
     for chr in range(len(results["results_r"])):
         results["results_r"][chr] = np.log2(results["results_r"][chr])
 
@@ -529,17 +519,13 @@ def log_trans(results: Dict[str, Any], log_r_median: float) -> None:
                 )
 
 
-"""
-Applies additional blacklist to results_r, results_z
-and results_w if requested.
-"""
-
-
 def apply_blacklist(
-    blacklist_path: Optional[str], binsize: int, results: Dict[str, Any]
+    blacklist_path: Path, binsize: int, results: Dict[str, Any]
 ) -> None:
-    if not blacklist_path:
-        return
+    """
+    Applies additional blacklist to results_r, results_z
+    and results_w if requested.
+    """
     blacklist = _import_bed(blacklist_path, binsize)
 
     for chr in blacklist.keys():
@@ -555,8 +541,11 @@ def apply_blacklist(
 
 
 def _import_bed(
-    blacklist_path: str, binsize: int
+    blacklist_path: Path, binsize: int
 ) -> Dict[int, List[List[int]]]:
+    """
+    Imports a blacklist from a BED file.
+    """
     bed = {}
     for line in open(blacklist_path):
         chr_name, s, e = line.strip().split("\t")
@@ -578,14 +567,8 @@ def _import_bed(
     return bed
 
 
-"""
-Executed CBS on results_r using results_w as weights.
-Calculates segmental zz-scores.
-"""
-
-
 def exec_cbs(
-    outid: str,
+    prefix: str,
     alpha: float,
     seed: int,
     wd: str,
@@ -593,7 +576,11 @@ def exec_cbs(
     binsize: int,
     results: Dict[str, Any],
 ) -> List[List[Any]]:
-    json_cbs_dir = os.path.abspath(outid + "_CBS_tmp")
+    """
+    Executed CBS on results_r using results_w as weights.
+    Calculates segmental zz-scores.
+    """
+    json_cbs_dir = os.path.abspath(prefix + "_CBS_tmp")
 
     json_dict = {
         "R_script": str("{}/include/CBS.R".format(wd)),
@@ -607,7 +594,7 @@ def exec_cbs(
         "outfile": str("{}_02.json".format(json_cbs_dir)),
     }
 
-    results_c = _get_processed_cbs(exec_R(json_dict))
+    results_c = _get_processed_cbs(exec_cbs(json_dict))
     segment_z = get_z_score(results_c, results)
     results_c = [
         results_c[i][:3] + [segment_z[i]] + [results_c[i][3]]
@@ -630,21 +617,20 @@ def _get_processed_cbs(
     return results_c
 
 
-"""
-Control function that executes following
-normalization strategies:
-- coverage normalization
-- between-sample normalization
-- within-sample normalization
-"""
-
-
 def normalize(
     maskrepeats: int,
     sample: Dict[str, np.ndarray],
     ref_file: Dict[str, Any],
     ref_gender: str,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float]:
+    """
+    Control function that executes following
+    normalization strategies:
+    - coverage normalization
+    - between-sample normalization
+    - within-sample normalization
+    """
+
     if ref_gender == "A":
         ap = ""
         cp = 0
@@ -665,19 +651,18 @@ def normalize(
     return results_r, results_z, results_w, ref_sizes, m_lr, m_z
 
 
-"""
-Function processes a result (e.g. results_r)
-to an easy-to-interpret format. Bins without
-information are set to 0.
-"""
-
-
 def get_post_processed_result(
     minrefbins: int,
     result: np.ndarray,
     ref_sizes: np.ndarray,
     rem_input: Dict[str, Any],
 ) -> List[List[Union[float, int]]]:
+    """
+    Function processes a result (e.g. results_r)
+    to an easy-to-interpret format. Bins without
+    information are set to 0.
+    """
+
     infinite_mask = ref_sizes < minrefbins
     result[infinite_mask] = 0
     inflated_results = inflate_results(result, rem_input)
@@ -694,13 +679,8 @@ def get_post_processed_result(
     return final_results
 
 
-"""
-Writes plots.
-"""
-
-
 def exec_write_plots(
-    outid: str,
+    prefix: str,
     wd: str,
     ref_gender: str,
     beta: float,
@@ -713,10 +693,12 @@ def exec_write_plots(
     add_plot_title: bool,
     results: Dict[str, Any],
 ) -> None:
-    from wisecondorx.plotter import create_plots
+    """
+    Writes plots.
+    """
 
-    plot_title = str(os.path.basename(outid)) if add_plot_title else ""
-    out_dir = f"{outid}.plots"
+    plot_title = str(os.path.basename(prefix)) if add_plot_title else ""
+    out_dir = f"{prefix}.plots"
 
     create_plots(
         out_dir=out_dir,
@@ -742,7 +724,7 @@ writes tables.
 
 
 def generate_output_tables(
-    outid: str,
+    prefix: str,
     binsize: int,
     regions: str,
     bins_per_chr: list,
@@ -753,21 +735,21 @@ def generate_output_tables(
     n_reads: int,
     results: Dict[str, Any],
 ) -> None:
-    _generate_bins_bed(outid, binsize, results)
+    _generate_bins_bed(prefix, binsize, results)
     _generate_segments_and_aberrations_bed(
-        outid, binsize, ref_gender, beta, zscore, results
+        prefix, binsize, ref_gender, beta, zscore, results
     )
     _generate_chr_statistics_file(
-        outid, bins_per_chr, binsize, gender, n_reads, results
+        prefix, bins_per_chr, binsize, gender, n_reads, results
     )
     if regions is not None:
-        _generate_regions_bed(outid, binsize, regions, bins_per_chr, results)
+        _generate_regions_bed(prefix, binsize, regions, bins_per_chr, results)
 
 
 def _generate_bins_bed(
-    outid: str, binsize: int, results: Dict[str, Any]
+    prefix: str, binsize: int, results: Dict[str, Any]
 ) -> None:
-    bins_file = open("{}_bins.bed".format(outid), "w")
+    bins_file = open("{}_bins.bed".format(prefix), "w")
     bins_file.write("chr\tstart\tend\tid\tratio\tzscore\n")
     results_r = results["results_r"]
     results_z = results["results_z"]
@@ -804,13 +786,13 @@ def _generate_bins_bed(
 
 
 def _generate_regions_bed(
-    outid: str,
+    prefix: str,
     binsize: int,
     regions_path: str,
     bins_per_chr: List[int],
     results: Dict[str, Any],
 ) -> None:
-    regions_file = open("{}_regions.bed".format(outid), "w")
+    regions_file = open("{}_regions.bed".format(prefix), "w")
     regions_file.write("chr\tstart\tend\tname\tratio\tzscore\n")
 
     with open(regions_path, "r") as regions_file_handle:
@@ -877,15 +859,15 @@ def _generate_regions_bed(
 
 
 def _generate_segments_and_aberrations_bed(
-    outid: str,
+    prefix: str,
     binsize: int,
     ref_gender: str,
     beta: float,
     zscore: float,
     results: Dict[str, Any],
 ) -> None:
-    segments_file = open("{}_segments.bed".format(outid), "w")
-    aberrations_file = open("{}_aberrations.bed".format(outid), "w")
+    segments_file = open("{}_segments.bed".format(prefix), "w")
+    aberrations_file = open("{}_aberrations.bed".format(prefix), "w")
     segments_file.write("chr\tstart\tend\tratio\tzscore\n")
     aberrations_file.write("chr\tstart\tend\tratio\tzscore\ttype\n")
 
@@ -939,14 +921,14 @@ def __get_aberration_cutoff(beta: float, ploidy: int) -> Tuple[float, float]:
 
 
 def _generate_chr_statistics_file(
-    outid: str,
+    prefix: str,
     bins_per_chr: List[int],
     binsize: int,
     gender: str,
     n_reads: int,
     results: Dict[str, Any],
 ) -> None:
-    stats_file = open("{}_statistics.txt".format(outid), "w")
+    stats_file = open("{}_statistics.txt".format(prefix), "w")
     stats_file.write("chr\tratio.mean\tratio.median\tzscore\n")
     chr_ratio_means = [
         np.ma.average(
@@ -1016,3 +998,98 @@ def _generate_chr_statistics_file(
     )
 
     stats_file.close()
+
+
+def get_cpa(results_c: List[List[Any]], binsize: int) -> float:
+    """
+    Returns CPA, measure for sample-wise abnormality.
+    """
+    x: float = 0.0
+    for segment in results_c:
+        x += (segment[2] - segment[1] + 1) * binsize * abs(segment[3])
+    CPA = x / len(results_c) * (10**-8)
+    return CPA
+
+
+def get_median_segment_variance(
+    results_c: List[List[Any]], results_r: List[Any]
+) -> float:
+    """
+    Returns median segment variance, measure for sample-wise noise.
+    """
+    vars: List[float] = []
+    for segment in results_c:
+        segment_r = results_r[segment[0]][int(segment[1]) : int(segment[2])]
+        segment_r = [x for x in segment_r if x != 0]
+        if segment_r:
+            var = np.var(segment_r)
+            vars.append(var)
+    return np.median(vars)
+
+
+def get_z_score(
+    results_c: List[List[Any]], results: Dict[str, Any]
+) -> List[Union[float, str]]:
+    """
+    Calculates between sample z-score.
+    """
+    results_nr, results_r, results_w = (
+        results["results_nr"],
+        results["results_r"],
+        results["results_w"],
+    )
+    zs: List[Union[float, str]] = []
+    for segment in results_c:
+        segment_nr = results_nr[segment[0]][segment[1] : segment[2]]
+        segment_rr = results_r[segment[0]][segment[1] : segment[2]]
+        segment_nr = [
+            segment_nr[i] for i in range(len(segment_nr)) if segment_rr[i] != 0
+        ]
+        for i in range(len(segment_nr)):
+            for ii in range(len(segment_nr[i])):
+                if not np.isfinite(segment_nr[i][ii]):
+                    segment_nr[i][ii] = np.nan
+        segment_w = results_w[segment[0]][segment[1] : segment[2]]
+        segment_w = [
+            segment_w[i] for i in range(len(segment_w)) if segment_rr[i] != 0
+        ]
+        null_segments = [
+            np.ma.average(
+                np.ma.masked_array(x, pd.isnull(x)), weights=segment_w
+            )
+            for x in np.transpose(segment_nr)
+        ]
+        null_mean = np.ma.mean([x for x in null_segments if np.isfinite(x)])
+        null_sd = np.ma.std([x for x in null_segments if np.isfinite(x)])
+        z = (segment[3] - null_mean) / null_sd
+        z = min(z, 1000)
+        z = max(z, -1000)
+        if math.isnan(null_mean) or math.isnan(null_sd):
+            z = "nan"
+        zs.append(z)
+    return zs
+
+
+def run_cbs(json_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Communicates with R. Outputs new json dictionary,
+    resulting from R, if 'outfile' is a key in the
+    input json. 'infile' and 'R_script' are mandatory keys
+    and correspond to the input file required to execute the
+    R_script, respectively.
+    """
+    json.dump(json_dict, open(json_dict["infile"], "w"))
+
+    r_cmd = ["Rscript", json_dict["R_script"], "--infile", json_dict["infile"]]
+    logging.debug("CBS cmd: {}".format(r_cmd))
+
+    try:
+        subprocess.check_call(r_cmd)
+    except subprocess.CalledProcessError as e:
+        logging.critical("Rscript failed: {}".format(e))
+        sys.exit()
+    os.remove(json_dict["infile"])
+    if "outfile" in json_dict.keys():
+        json_out = json.load(open(json_dict["outfile"]))
+        os.remove(json_dict["outfile"])
+        return json_out
