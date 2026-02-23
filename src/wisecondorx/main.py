@@ -8,6 +8,7 @@ import warnings
 import numpy as np
 import typer
 from typing import Optional, List, Dict, Any
+from pathlib import Path
 
 from wisecondorx.convert_tools import convert_reads
 from wisecondorx.newref_control import (
@@ -55,17 +56,17 @@ def main_callback(
 
 @app.command("convert")
 def tool_convert(
-    infile: str = typer.Argument(
+    infile: Path = typer.Argument(
         ..., help="aligned reads input for conversion (.bam or .cram)"
     ),
-    outfile: str = typer.Argument(..., help="Output .npz file"),
+    outfile: Path = typer.Argument(..., help="Output .npz file"),
     reference: Optional[str] = typer.Option(
         None,
         "-r",
         "--reference",
         help="Fasta reference to be used during cram conversion",
     ),
-    binsize: float = typer.Option(5e3, "--binsize", help="Bin size (bp)"),
+    binsize: int = typer.Option(5e3, "--binsize", help="Bin size (bp)"),
     normdup: bool = typer.Option(
         False, "--normdup", help="Do not remove duplicates", is_flag=True
     ),
@@ -73,6 +74,32 @@ def tool_convert(
     """
     Convert and filter aligned reads to .npz format.
     """
+
+    # argument sanity check
+    # check if infile exists and has an index
+    if not (infile.exists() and infile.is_file()):
+        logging.error(f"Input file {infile} does not exist or is not a file.")
+        sys.exit(1)
+    if infile.suffix == ".bam":
+        if (
+            not Path(infile, ".bai").exists()
+            and not Path(infile, ".csi").exists()
+        ):
+            logging.error(
+                "Bam inputs need to have a 'bai' or 'csi' index present. Run 'samtools index {f}' to generate the index."
+            )
+    elif infile.suffix == ".cram":
+        if not Path(infile, ".crai").exists():
+            logging.error(
+                "Cram inputs need to have a 'crai' index present. Run 'samtools index {f}' to generate the index."
+            )
+        if not reference:
+            logging.error(
+                "Cram inputs need a reference fasta provided through the '--reference' flag."
+            )
+        elif not reference.exists():
+            logging.error(f"Fasta reference file {reference} does not exist.")
+
     logging.info("Starting conversion")
 
     sample, qual_info = convert_reads(
@@ -87,23 +114,23 @@ def tool_convert(
 
 @app.command("newref")
 def tool_newref(
-    infiles: List[str] = typer.Argument(
+    infiles: List[Path] = typer.Argument(
         ...,
         help="Path to all reference data files (e.g. path/to/reference/*.npz)",
     ),
-    outfile: str = typer.Argument(
+    outfile: Path = typer.Argument(
         ...,
         help="Path and filename for the reference output (e.g. path/to/myref.npz)",
     ),
     nipt: bool = typer.Option(
         False, "--nipt", help="Use flag for NIPT", is_flag=True
     ),
-    yfrac: Optional[float] = typer.Option(
+    yfrac: float = typer.Option(
         None,
         "--yfrac",
         help="Use to manually set the Y read fraction cutoff, which defines gender",
     ),
-    plotyfrac: Optional[str] = typer.Option(
+    plotyfrac: Path = typer.Option(
         None,
         "--plotyfrac",
         help="Path to yfrac .png plot for optimization; software will stop after plotting",
@@ -145,7 +172,7 @@ def tool_newref(
     tmpoutfile_F = f"{basepath}.tmp.F.npz"
     tmpoutfile_M = f"{basepath}.tmp.M.npz"
 
-    samples: List[Dict[str, np.ndarray]] = []
+    samples: list[dict[str, np.ndarray]] = []
     logging.info("Importing data ...")
     for infile in infiles:
         logging.info(f"Loading: {infile}")
@@ -271,8 +298,8 @@ def tool_newref(
 
 @app.command("gender")
 def output_gender(
-    infile: str = typer.Argument(..., help=".npz input file"),
-    reference: str = typer.Argument(
+    infile: Path = typer.Argument(..., help=".npz input file"),
+    reference: Path = typer.Argument(
         ..., help="Reference .npz, as previously created with newref"
     ),
 ) -> None:
@@ -292,8 +319,8 @@ def output_gender(
 
 @app.command("predict")
 def tool_predict(
-    infile: str = typer.Argument(..., help=".npz input file"),
-    reference: str = typer.Argument(
+    infile: Path = typer.Argument(..., help=".npz input file"),
+    reference: Path = typer.Argument(
         ..., help="Reference .npz, as previously created with newref"
     ),
     outid: str = typer.Argument(

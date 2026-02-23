@@ -3,10 +3,11 @@
 import logging
 
 import sys
-from typing import Dict, Tuple, Optional
+from typing import Optional
 
 import numpy as np
 import pysam
+from pathlib import Path
 
 """
 Converts aligned reads file to numpy array by transforming
@@ -15,18 +16,21 @@ individual reads to counts per bin.
 
 
 def convert_reads(
-    infile: str, binsize: float, normdup: bool, reference: Optional[str] = None
-) -> Tuple[Dict[str, np.ndarray], Dict[str, int]]:
-    bins_per_chr: Dict[str, np.ndarray] = dict()
+    infile: Path,
+    binsize: float,
+    normdup: bool,
+    reference: Optional[str] = None,
+) -> tuple[dict[str, np.ndarray], dict[str, int]]:
+    bins_per_chr: dict[str, np.ndarray] = dict()
     for chr in range(1, 25):
         bins_per_chr[str(chr)] = None
 
     logging.info("Importing data ...")
 
-    if infile.endswith(".bam"):
+    if infile.suffix == ".bam":
         reads_file = pysam.AlignmentFile(infile, "rb")
-    elif infile.endswith(".cram"):
-        if reference is not None:
+    elif infile.suffix == ".cram":
+        if reference:
             reads_file = pysam.AlignmentFile(
                 infile, "rc", reference_filename=reference
             )
