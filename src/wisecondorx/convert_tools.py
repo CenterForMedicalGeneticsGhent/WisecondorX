@@ -7,12 +7,70 @@ from typing import Optional
 
 import numpy as np
 import pysam
+import typer
 from pathlib import Path
 
 """
 Converts aligned reads file to numpy array by transforming
 individual reads to counts per bin.
 """
+
+
+def wcx_convert(
+    infile: Path = typer.Argument(
+        ..., help="aligned reads input for conversion (.bam or .cram)"
+    ),
+    outfile: Path = typer.Argument(..., help="Output .npz file"),
+    reference: Optional[str] = typer.Option(
+        None,
+        "-r",
+        "--reference",
+        help="Fasta reference to be used during cram conversion",
+    ),
+    binsize: int = typer.Option(5e3, "--binsize", help="Bin size (bp)"),
+    normdup: bool = typer.Option(
+        False, "--normdup", help="Do not remove duplicates", is_flag=True
+    ),
+) -> None:
+    """
+    Convert and filter aligned reads to .npz format.
+    """
+
+    # argument sanity check
+    # check if infile exists and has an index
+    if not (infile.exists() and infile.is_file()):
+        logging.error(f"Input file {infile} does not exist or is not a file.")
+        sys.exit(1)
+    if infile.suffix == ".bam":
+        if (
+            not Path(infile, ".bai").exists()
+            and not Path(infile, ".csi").exists()
+        ):
+            logging.error(
+                "Bam inputs need to have a 'bai' or 'csi' index present. Run 'samtools index {f}' to generate the index."
+            )
+    elif infile.suffix == ".cram":
+        if not Path(infile, ".crai").exists():
+            logging.error(
+                "Cram inputs need to have a 'crai' index present. Run 'samtools index {f}' to generate the index."
+            )
+        if not reference:
+            logging.error(
+                "Cram inputs need a reference fasta provided through the '--reference' flag."
+            )
+        elif not reference.exists():
+            logging.error(f"Fasta reference file {reference} does not exist.")
+
+    logging.info("Starting conversion")
+
+    sample, qual_info = convert_reads(
+        infile=infile, binsize=binsize, normdup=normdup, reference=reference
+    )
+    np.savez_compressed(
+        outfile, binsize=binsize, sample=sample, quality=qual_info
+    )
+
+    logging.info("Finished conversion")
 
 
 def convert_reads(

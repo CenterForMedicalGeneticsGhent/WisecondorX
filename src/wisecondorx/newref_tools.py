@@ -3,12 +3,23 @@
 import bisect
 import logging
 import random
+import os
+import sys
+from pathlib import Path
 from typing import List, Tuple, Optional
 
 import numpy as np
 from scipy.signal import argrelextrema
 from sklearn.decomposition import PCA
 from sklearn.mixture import GaussianMixture
+import typer
+
+from wisecondorx.overall_tools import scale_sample, gender_correct
+from wisecondorx.newref_control import (
+    tool_newref_prep,
+    tool_newref_main,
+    tool_newref_merge,
+)
 
 """
 A Gaussian mixture model is fitted against
@@ -17,6 +28,189 @@ Two components are expected: one for males,
 and one for females. The local minimum will
 serve as the cut-off point.
 """
+
+
+def wcx_newref(
+    infiles: List[Path] = typer.Argument(
+        ...,
+        help="Path to all reference data files (e.g. path/to/reference/*.npz)",
+    ),
+    outfile: Path = typer.Argument(
+        ...,
+        help="Path and filename for the reference output (e.g. path/to/myref.npz)",
+    ),
+    nipt: bool = typer.Option(
+        False, "--nipt", help="Use flag for NIPT", is_flag=True
+    ),
+    yfrac: float = typer.Option(
+        None,
+        "--yfrac",
+        help="Use to manually set the Y read fraction cutoff, which defines gender",
+    ),
+    plotyfrac: Path = typer.Option(
+        None,
+        "--plotyfrac",
+        help="Path to yfrac .png plot for optimization; software will stop after plotting",
+    ),
+    refsize: int = typer.Option(
+        300, "--refsize", help="Amount of reference locations per target"
+    ),
+    binsize: int = int(
+        1e5
+    ),  # Cannot use scientific notation as default for Typer Option int
+    cpus: int = typer.Option(
+        1, "--cpus", help="Use multiple cores to find reference bins"
+    ),
+) -> None:
+    """
+    Create a new reference using healthy reference samples.
+    """
+    # Fix the binsize type from typer, because 1e5 is float
+    binsize_val = int(binsize)
+
+    logging.info("Creating new reference")
+
+    if yfrac is not None:
+        if yfrac < 0 or yfrac > 1:
+            logging.critical(
+                "Parameter --yfrac should be a positive number lower than or equal to 1"
+            )
+            sys.exit(1)
+
+    split_path = list(os.path.split(outfile))
+    if split_path[-1].endswith(".npz"):
+        split_path[-1] = split_path[-1][:-4]
+
+    basepath = os.path.join(split_path[0], split_path[1])
+    prepfile = f"{basepath}_prep.npz"
+    prepdatafile = f"{basepath}_prep_data.npy"
+    partfile = f"{basepath}_part"
+    tmpoutfile_A = f"{basepath}.tmp.A.npz"
+    tmpoutfile_F = f"{basepath}.tmp.F.npz"
+    tmpoutfile_M = f"{basepath}.tmp.M.npz"
+
+    samples: list[dict[str, np.ndarray]] = []
+    logging.info("Importing data ...")
+    for infile in infiles:
+        logging.info(f"Loading: {infile}")
+        npzdata = np.load(infile, encoding="latin1", allow_pickle=True)
+        sample = npzdata["sample"].item()
+        b_size = int(npzdata["binsize"])
+        logging.info(f"Binsize: {int(b_size)}")
+        samples.append(scale_sample(sample, b_size, binsize_val))
+
+    samples_array = np.array(samples)
+    genders, trained_cutoff = train_gender_model(
+        samples=samples_array, yfrac=yfrac, plotyfrac=plotyfrac
+    )
+
+    if genders.count("F") < 5 and nipt:
+        logging.warning(
+            "A NIPT reference should have at least 5 female feti samples. Removing --nipt flag."
+        )
+        nipt = False
+
+    if not nipt:
+        for i, sample in enumerate(samples_array):
+            samples_array[i] = gender_correct(sample, genders[i])
+
+    total_mask, bins_per_chr = get_mask(samples_array)
+    if genders.count("F") > 4:
+        mask_F, _ = get_mask(samples_array[np.array(genders) == "F"])
+        total_mask = total_mask & mask_F
+    if genders.count("M") > 4 and not nipt:
+        mask_M, _ = get_mask(samples_array[np.array(genders) == "M"])
+        total_mask = total_mask & mask_M
+
+    outfiles_list: List[str] = []
+
+    if len(genders) > 9:
+        logging.info("Starting autosomal reference creation ...")
+        outfiles_list.append(tmpoutfile_A)
+        tool_newref_prep(
+            prepdatafile=prepdatafile,
+            prepfile=prepfile,
+            binsize=binsize_val,
+            samples=samples_array,
+            gender="A",
+            mask=total_mask,
+            bins_per_chr=bins_per_chr,
+        )
+        logging.info("This might take a while ...")
+        tool_newref_main(
+            prepdatafile=prepdatafile,
+            prepfile=prepfile,
+            partfile=partfile,
+            tmpoutfile=tmpoutfile_A,
+            refsize=refsize,
+            cpus=cpus,
+        )
+    else:
+        logging.critical(
+            "Provide at least 10 samples to enable the generation of a reference."
+        )
+        sys.exit(1)
+
+    if genders.count("F") > 4:
+        logging.info("Starting female gonosomal reference creation ...")
+        outfiles_list.append(tmpoutfile_F)
+        tool_newref_prep(
+            prepdatafile=prepdatafile,
+            prepfile=prepfile,
+            binsize=binsize_val,
+            samples=samples_array[np.array(genders) == "F"],
+            gender="F",
+            mask=total_mask,
+            bins_per_chr=bins_per_chr,
+        )
+        logging.info("This might take a while ...")
+        tool_newref_main(
+            prepdatafile=prepdatafile,
+            prepfile=prepfile,
+            partfile=partfile,
+            tmpoutfile=tmpoutfile_F,
+            refsize=refsize,
+            cpus=1,
+        )
+    else:
+        logging.warning(
+            "Provide at least 5 female samples to enable normalization of female gonosomes."
+        )
+
+    if not nipt:
+        if genders.count("M") > 4:
+            logging.info("Starting male gonosomal reference creation ...")
+            outfiles_list.append(tmpoutfile_M)
+            tool_newref_prep(
+                prepdatafile=prepdatafile,
+                prepfile=prepfile,
+                binsize=binsize_val,
+                samples=samples_array[np.array(genders) == "M"],
+                gender="M",
+                mask=total_mask,
+                bins_per_chr=bins_per_chr,
+            )
+            tool_newref_main(
+                prepdatafile=prepdatafile,
+                prepfile=prepfile,
+                partfile=partfile,
+                tmpoutfile=tmpoutfile_M,
+                refsize=refsize,
+                cpus=1,
+            )
+        else:
+            logging.warning(
+                "Provide at least 5 male samples to enable normalization of male gonosomes."
+            )
+
+    tool_newref_merge(
+        outfile=outfile,
+        nipt=nipt,
+        outfiles=outfiles_list,
+        trained_cutoff=trained_cutoff,
+    )
+
+    logging.info("Finished creating reference")
 
 
 def train_gender_model(

@@ -6339,7 +6339,7 @@ packages:
 - pypi: ./
   name: wisecondorx
   version: 1.2.11
-  sha256: 55bf858ad86c53f41cced9c5fcc884d1f85c4c846640dc41309c8df81fad4855
+  sha256: 702d83084da263972d4f2064db90f16b89f877d13460a4695f27a11af23bfe66
   requires_dist:
   - numpy
   - pandas

@@ -1,12 +1,316 @@
 # WisecondorX
 
 import os
+import sys
+from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional, Union
 
 import numpy as np
 from scipy.stats import norm
+import typer
 
-from wisecondorx.overall_tools import exec_R, get_z_score
+from wisecondorx.overall_tools import (
+    exec_R,
+    get_z_score,
+    scale_sample,
+    gender_correct,
+)
+from wisecondorx.predict_output import exec_write_plots, generate_output_tables
+from wisecondorx.predict_control import normalize, get_post_processed_result
+import logging
+
+
+def wcx_gender(
+    infile: Path = typer.Argument(..., help=".npz input file"),
+    reference: Path = typer.Argument(
+        ..., help="Reference .npz, as previously created with newref"
+    ),
+) -> None:
+    """
+    Returns the gender of a .npz resulting from convert, based on a Gaussian mixture model trained during the newref phase.
+    """
+    ref_file = np.load(reference, encoding="latin1", allow_pickle=True)
+    sample_file = np.load(infile, encoding="latin1", allow_pickle=True)
+    gender = predict_gender(
+        sample_file["sample"].item(), ref_file["trained_cutoff"]
+    )
+    if gender == "M":
+        print("male")
+    else:
+        print("female")
+
+
+def wcx_predict(
+    infile: Path = typer.Argument(..., help=".npz input file"),
+    reference: Path = typer.Argument(
+        ..., help="Reference .npz, as previously created with newref"
+    ),
+    outid: str = typer.Argument(
+        ...,
+        help="Basename (w/o extension) of output files (paths are allowed, e.g. path/to/ID_1)",
+    ),
+    minrefbins: int = typer.Option(
+        150,
+        "--minrefbins",
+        help="Minimum amount of sensible reference bins per target bin.",
+    ),
+    maskrepeats: int = typer.Option(
+        5,
+        "--maskrepeats",
+        help="Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.",
+    ),
+    alpha: float = typer.Option(
+        1e-4, "--alpha", help="p-value cut-off for calling a CBS breakpoint."
+    ),
+    zscore: float = typer.Option(
+        5.0, "--zscore", help="z-score cut-off for aberration calling."
+    ),
+    beta: Optional[float] = typer.Option(
+        None,
+        "--beta",
+        help="When beta is given, --zscore is ignored and a ratio cut-off is used to call aberrations.",
+    ),
+    blacklist: Optional[str] = typer.Option(
+        None,
+        "--blacklist",
+        help="Blacklist that masks regions in output, structure of header-less file: chr...(/t)startpos(/t)endpos(/n)",
+    ),
+    gender_override: Optional[str] = typer.Option(
+        None,
+        "--gender",
+        help="Force WisecondorX to analyze this case as a male (M) or a female (F)",
+    ),
+    ylim: str = typer.Option(
+        "def", "--ylim", help="y-axis limits for plotting. e.g. [-2,2]"
+    ),
+    bed: bool = typer.Option(
+        True,
+        "--bed",
+        help="Outputs tab-delimited .bed files, containing the most important information",
+        is_flag=True,
+    ),
+    plot: bool = typer.Option(
+        False, "--plot", help="Outputs .png plots", is_flag=True
+    ),
+    cairo: bool = typer.Option(
+        False,
+        "--cairo",
+        help="Uses cairo bitmap type for plotting. Might be necessary for certain setups.",
+        is_flag=True,
+    ),
+    add_plot_title: bool = typer.Option(
+        False,
+        "--add-plot-title",
+        help="Add the output name as plot title",
+        is_flag=True,
+    ),
+    seed: Optional[int] = typer.Option(
+        None, "--seed", help="Seed for segmentation algorithm"
+    ),
+    regions: Optional[str] = typer.Option(
+        None,
+        "--regions",
+        help="List of regions to be marked on the output plot",
+    ),
+) -> None:
+    """
+    Find copy number aberrations.
+    """
+    logging.info("Starting CNA prediction")
+
+    if not bed and not plot:
+        logging.critical(
+            "No output format selected. Select at least one of the supported output formats (--bed, --plot)"
+        )
+        sys.exit(1)
+
+    if zscore <= 0:
+        logging.critical(
+            "Parameter --zscore should be a strictly positive number"
+        )
+        sys.exit(1)
+
+    if beta is not None:
+        if beta <= 0 or beta > 1:
+            logging.critical(
+                "Parameter --beta should be a strictly positive number lower than or equal to 1"
+            )
+            sys.exit(1)
+
+    if alpha <= 0 or alpha > 1:
+        logging.critical(
+            "Parameter --alpha should be a strictly positive number lower than or equal to 1"
+        )
+        sys.exit(1)
+
+    logging.info("Importing data ...")
+    ref_file = np.load(reference, encoding="latin1", allow_pickle=True)
+    sample_file = np.load(infile, encoding="latin1", allow_pickle=True)
+
+    sample = sample_file["sample"].item()
+    n_reads = sum([sum(sample[x]) for x in sample.keys()])
+    ref_binsize = int(ref_file["binsize"])
+    sample = scale_sample(
+        sample, int(sample_file["binsize"].item()), ref_binsize
+    )
+
+    gender = predict_gender(sample, ref_file["trained_cutoff"])
+    if not ref_file["is_nipt"]:
+        if gender_override:
+            gender = gender_override
+        sample = gender_correct(sample, gender)
+        ref_gender = gender
+    else:
+        if gender_override:
+            gender = gender_override
+        ref_gender = "F"
+
+    logging.info("Normalizing autosomes ...")
+
+    results_r, results_z, results_w, ref_sizes, m_lr, m_z = normalize(
+        maskrepeats=maskrepeats,
+        sample=sample,
+        ref_file=ref_file,
+        ref_gender="A",
+    )
+
+    if not ref_file["is_nipt"]:
+        if not ref_file["has_male"] and gender == "M":
+            logging.warning(
+                "This sample is male, whilst the reference is created with fewer than 5 males. The female gonosomal reference will be used for X predictions."
+            )
+            ref_gender = "F"
+        elif not ref_file["has_female"] and gender == "F":
+            logging.warning(
+                "This sample is female, whilst the reference is created with fewer than 5 females. The male gonosomal reference will be used for XY predictions."
+            )
+            ref_gender = "M"
+
+    logging.info("Normalizing gonosomes ...")
+
+    null_ratios_aut_per_bin = ref_file["null_ratios"]
+    null_ratios_gon_per_bin = ref_file[f"null_ratios.{ref_gender}"][
+        len(null_ratios_aut_per_bin) :
+    ]
+
+    results_r_2, results_z_2, results_w_2, ref_sizes_2, _, _ = normalize(
+        maskrepeats=maskrepeats,
+        sample=sample,
+        ref_file=ref_file,
+        ref_gender=ref_gender,
+    )
+
+    wd = str(os.path.dirname(os.path.realpath(__file__)))
+    bpc = ref_file[f"bins_per_chr.{ref_gender}"]
+    mbpc = ref_file[f"masked_bins_per_chr.{ref_gender}"]
+    mbpcc = ref_file[f"masked_bins_per_chr_cum.{ref_gender}"]
+    ref_mask = ref_file[f"mask.{ref_gender}"]
+
+    rem_input: Dict[str, Any] = {
+        "wd": wd,
+        "binsize": ref_binsize,
+        "n_reads": n_reads,
+        "ref_gender": ref_gender,
+        "gender": gender,
+        "mask": ref_mask,
+        "bins_per_chr": bpc,
+        "masked_bins_per_chr": mbpc,
+        "masked_bins_per_chr_cum": mbpcc,
+    }
+
+    del ref_file
+
+    results_r = np.append(results_r, results_r_2)
+    results_z = np.append(results_z, results_z_2) - m_z
+    results_w = np.append(
+        results_w * np.nanmean(results_w_2),
+        results_w_2 * np.nanmean(results_w),
+    )
+    results_w = results_w / np.nanmean(results_w)
+
+    if np.isnan(results_w).any() or np.isinf(results_w).any():
+        logging.warning(
+            "Non-numeric values found in weights -- reference too small. Circular binary segmentation and z-scoring will be unweighted"
+        )
+        results_w = np.ones(len(results_w))
+
+    ref_sizes = np.append(ref_sizes, ref_sizes_2)
+
+    null_ratios = np.array(
+        [x.tolist() for x in null_ratios_aut_per_bin]
+        + [x.tolist() for x in null_ratios_gon_per_bin],
+        dtype=object,
+    )
+
+    results: Dict[str, Any] = {
+        "results_r": results_r,
+        "results_z": results_z,
+        "results_w": results_w,
+        "results_nr": null_ratios,
+    }
+
+    for result_key in results.keys():
+        results[result_key] = get_post_processed_result(
+            minrefbins=minrefbins,
+            result=results[result_key],
+            ref_sizes=ref_sizes,
+            rem_input=rem_input,
+        )
+
+    log_trans(results, m_lr)
+
+    if blacklist:
+        logging.info("Applying blacklist ...")
+        apply_blacklist(
+            blacklist_path=blacklist, binsize=ref_binsize, results=results
+        )
+
+    logging.info("Executing circular binary segmentation ...")
+
+    results["results_c"] = exec_cbs(
+        outid=outid,
+        alpha=alpha,
+        seed=seed,
+        wd=wd,
+        ref_gender=ref_gender,
+        binsize=ref_binsize,
+        results=results,
+    )
+
+    if bed:
+        logging.info("Writing tables ...")
+        generate_output_tables(
+            outid=outid,
+            binsize=ref_binsize,
+            regions=regions,
+            bins_per_chr=bpc,
+            ref_gender=ref_gender,
+            beta=beta,
+            zscore=zscore,
+            gender=gender,
+            n_reads=n_reads,
+            results=results,
+        )
+
+    if plot:
+        logging.info("Writing plots ...")
+        exec_write_plots(
+            outid=outid,
+            wd=wd,
+            ref_gender=ref_gender,
+            beta=beta,
+            zscore=zscore,
+            binsize=ref_binsize,
+            n_reads=n_reads,
+            cairo_flag=cairo,
+            ylim=ylim,
+            regions=regions,
+            add_plot_title=add_plot_title,
+            results=results,
+        )
+
+    logging.info("Finished prediction")
+
 
 """
 Returns gender based on Gaussian mixture
