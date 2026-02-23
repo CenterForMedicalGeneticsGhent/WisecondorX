@@ -5,9 +5,9 @@ import warnings
 
 import typer
 
-from wisecondorx.convert_tools import wcx_convert
-from wisecondorx.newref_tools import wcx_newref
-from wisecondorx.predict_tools import wcx_gender, wcx_predict
+from wisecondorx.convert import wcx_convert
+from wisecondorx.newref import wcx_newref
+from wisecondorx.predict import wcx_gender, wcx_predict
 from wisecondorx import __version__
 
 VERSION: str = __version__

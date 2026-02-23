@@ -36,7 +36,7 @@ def wcx_convert(
     Convert and filter aligned reads to .npz format.
     """
 
-    # argument sanity check
+    reads_file: pysam.AlignmentFile = None
     # check if infile exists and has an index
     if not (infile.exists() and infile.is_file()):
         logging.error(f"Input file {infile} does not exist or is not a file.")
@@ -49,6 +49,7 @@ def wcx_convert(
             logging.error(
                 "Bam inputs need to have a 'bai' or 'csi' index present. Run 'samtools index {f}' to generate the index."
             )
+        reads_file = pysam.AlignmentFile(infile, "rb")
     elif infile.suffix == ".cram":
         if not Path(infile, ".crai").exists():
             logging.error(
@@ -60,48 +61,15 @@ def wcx_convert(
             )
         elif not reference.exists():
             logging.error(f"Fasta reference file {reference} does not exist.")
-
-    logging.info("Starting conversion")
-
-    sample, qual_info = convert_reads(
-        infile=infile, binsize=binsize, normdup=normdup, reference=reference
-    )
-    np.savez_compressed(
-        outfile, binsize=binsize, sample=sample, quality=qual_info
-    )
-
-    logging.info("Finished conversion")
-
-
-def convert_reads(
-    infile: Path,
-    binsize: float,
-    normdup: bool,
-    reference: Optional[str] = None,
-) -> tuple[dict[str, np.ndarray], dict[str, int]]:
-    bins_per_chr: dict[str, np.ndarray] = dict()
-    for chr in range(1, 25):
-        bins_per_chr[str(chr)] = None
+        reads_file = pysam.AlignmentFile(
+            infile, "rc", reference_filename=reference
+        )
 
     logging.info("Importing data ...")
 
-    if infile.suffix == ".bam":
-        reads_file = pysam.AlignmentFile(infile, "rb")
-    elif infile.suffix == ".cram":
-        if reference:
-            reads_file = pysam.AlignmentFile(
-                infile, "rc", reference_filename=reference
-            )
-        else:
-            logging.error(
-                "Cram support requires a reference file, please use the --reference argument"
-            )
-            sys.exit(1)
-    else:
-        logging.error(
-            "Unsupported input file type. Make sure your input filename has a correct extension ( bam or cram)"
-        )
-        sys.exit(1)
+    bins_per_chr: dict[str, np.ndarray] = dict()
+    for chr in range(1, 25):
+        bins_per_chr[str(chr)] = None
 
     reads_seen = 0
     reads_kept = 0
@@ -187,4 +155,9 @@ def convert_reads(
         "post_retro": reads_kept,
         "pair_fail": reads_pairf,
     }
-    return bins_per_chr, qual_info
+
+    np.savez_compressed(
+        outfile, binsize=binsize, sample=bins_per_chr, quality=qual_info
+    )
+
+    logging.info("Finished conversion")
