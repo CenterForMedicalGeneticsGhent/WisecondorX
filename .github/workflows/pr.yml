@@ -1,0 +1,23 @@
+name: Lint and Test
+
+on:
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          environments: dev
+          cache: true
+
+      - name: Run linter
+        run: pixi run lint
+
+      - name: Run tests
+        run: pixi run test
