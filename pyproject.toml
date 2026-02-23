@@ -94,15 +94,20 @@ scikit-learn = ">=1.8.0,<2"
 scipy = ">=1.17.0,<2"
 numpy = ">=2.4.2,<3"
 typer = ">=0.24.0,<0.25"
+rust = ">=1.93.1,<1.94"
+maturin = ">=1.12.4,<2"
+psutil = ">=7.2.2,<8"
 
 [tool.pixi.pypi-dependencies]
 wisecondorx = { path = ".", editable = true }
+wisecondorx-rs = { path = "src/wisecondorx-rs", editable = true }
 
 # ── Pixi features ──────────────────────────────────────────────────────────────
 [tool.pixi.feature.dev.dependencies]
 ruff   = "*"
 prek   = "*"
 pytest = "*"
+maturin = ">=1.12.4,<2"
 
 [tool.pixi.feature.dev.pypi-dependencies]
 wisecondorx = { path = ".", editable = true, extras = ["dev"] }
