@@ -718,29 +718,26 @@ def exec_write_plots(
     add_plot_title: bool,
     results: Dict[str, Any],
 ) -> None:
-    json_plot_dir = os.path.abspath(outid + "_plot_tmp")
-    json_dict = {
-        "R_script": str("{}/include/plotter.R".format(wd)),
-        "ref_gender": str(ref_gender),
-        "beta": str(beta),
-        "zscore": str(zscore),
-        "binsize": str(binsize),
-        "n_reads": str(n_reads),
-        "cairo": str(cairo_flag),
-        "results_r": results["results_r"],
-        "results_w": results["results_w"],
-        "results_c": results["results_c"],
-        "ylim": str(ylim),
-        "regions": str(regions),
-        "infile": str("{}.json".format(json_plot_dir)),
-        "out_dir": str("{}.plots".format(outid)),
-    }
+    from wisecondorx.plotter import create_plots
 
-    if add_plot_title:
-        # Strip away paths from the outid if need be
-        json_dict["plot_title"] = str(os.path.basename(outid))
+    plot_title = str(os.path.basename(outid)) if add_plot_title else ""
+    out_dir = f"{outid}.plots"
 
-    exec_R(json_dict)
+    create_plots(
+        out_dir=out_dir,
+        ref_gender=ref_gender,
+        beta=beta,
+        zscore=zscore,
+        binsize=binsize,
+        n_reads=n_reads,
+        cairo_flag=cairo_flag,
+        ylim_str=ylim,
+        regions_file=regions,
+        plot_title=plot_title,
+        results_r=results["results_r"],
+        results_w=results["results_w"],
+        results_c=results["results_c"],
+    )
 
 
 """
