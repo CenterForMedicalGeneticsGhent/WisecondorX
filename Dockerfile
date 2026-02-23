@@ -1,13 +1,16 @@
-FROM mambaorg/micromamba:1.5.10-noble
-COPY --chown=$MAMBA_USER:$MAMBA_USER conda.yml /tmp/conda.yml
-RUN micromamba install -y -n base -f /tmp/conda.yml \
-    && micromamba install -y -n base conda-forge::procps-ng \
-    && micromamba env export --name base --explicit > environment.lock \
-    && echo ">> CONDA_LOCK_START" \
-    && cat environment.lock \
-    && echo "<< CONDA_LOCK_END" \
-    && micromamba clean -a -y
-USER root
-ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
-COPY . .
-RUN pip install .
+FROM ghcr.io/prefix-dev/pixi:latest
+
+WORKDIR /app
+
+# Copy the environment lock / config
+COPY pixi.lock pyproject.toml ./
+
+# Copy the rest of the project required by pypi builds
+COPY src/ ./src/
+COPY README.md LICENSE.md ./
+
+# Install dependencies and the project
+RUN pixi install --locked
+
+# Set the entrypoint to run the wisecondorx CLI
+ENTRYPOINT ["pixi", "run", "wisecondorx"]

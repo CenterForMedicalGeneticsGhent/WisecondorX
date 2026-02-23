@@ -1,26 +1,114 @@
-[tool.black]
+# ── Build backend ─────────────────────────────────────────────────────────────
+[build-system]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+# ── Project metadata (PEP 621) ─────────────────────────────────────────────────
+[project]
+name = "wisecondorx"
+version = "1.2.11"
+description = "WisecondorX -- an evolved WISECONDOR"
+readme = "README.md"
+license = "LicenseRef-by-nc-sa"
+license-files = ["LICENSE.md"]
+authors = [
+  { name = "Matthias De Smet", email = "ict.cmgg@uzgent.be" },
+  { name = "Lennart Raman" },
+]
+requires-python = ">=3.10"
+keywords = [
+  "bioinformatics", "biology", "sequencing", "NGS",
+  "next generation sequencing", "CNV", "SWGS",
+  "Shallow Whole Genome Sequencing",
+]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: Science/Research",
+  "Natural Language :: English",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: POSIX",
+  "Operating System :: Unix",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+  "scipy",
+  "scikit-learn",
+  "pysam",
+  "numpy",
+  "pandas",
+]
+
+[project.scripts]
+wisecondorx  = "wisecondorx.main:main"
+WisecondorX  = "wisecondorx.main:main"
+wisecondorX  = "wisecondorx.main:main"
+
+[project.optional-dependencies]
+dev = [
+  "ruff",
+  "prek",
+  "pytest",
+]
+
+# ── Setuptools package discovery ───────────────────────────────────────────────
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+wisecondorx = ["*.R"]
+
+# ── Ruff (replaces black + flake8) ─────────────────────────────────────────────
+[tool.ruff]
 line-length = 79
-target_version = ['py36','py37','py38','py39']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "C90"]
+ignore = ["E266", "E203", "E501", "C901"]
+
+# ── Pixi workspace ─────────────────────────────────────────────────────────────
 [tool.pixi.workspace]
 name = "WisecondorX"
 channels = ["conda-forge", "bioconda"]
-platforms = ["linux-64", "osx-arm64"]
+platforms = ["linux-64", "osx-arm64", "linux-aarch64"]
+
+[tool.pixi.dependencies]
+python = ">=3.10"
+r = ">=4.5,<4.6"
+r-jsonlite = ">=2.0.0,<3"
+r-png = ">=0.1_8,<0.2"
+bioconductor-dnacopy = ">=1.84.0,<2"
+matplotlib-base = ">=3.10.8,<4"
+pandas = ">=3.0.1,<4"
+pysam = ">=0.23.3,<0.24"
+scikit-learn = ">=1.8.0,<2"
+scipy = ">=1.17.0,<2"
+numpy = ">=2.4.2,<3"
 
 [tool.pixi.pypi-dependencies]
-WisecondorX = { path = ".", editable = true }
+wisecondorx = { path = ".", editable = true }
 
-[tool.pixi.tasks]
+# ── Pixi features ──────────────────────────────────────────────────────────────
+[tool.pixi.feature.dev.dependencies]
+ruff   = "*"
+prek   = "*"
+pytest = "*"
+
+[tool.pixi.feature.dev.pypi-dependencies]
+wisecondorx = { path = ".", editable = true, extras = ["dev"] }
+
+[tool.pixi.feature.dev.tasks]
+lint    = "ruff check src"
+fmt     = "ruff format src"
+test    = "pytest"
+hooks   = "prek install"
+
+# ── Pixi environments ──────────────────────────────────────────────────────────
+[tool.pixi.environments]
+default = { solve-group = "default" }
+dev     = { features = ["dev"], solve-group = "default" }

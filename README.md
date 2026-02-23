@@ -182,18 +182,46 @@ This file contains aberrant segments, defined by the [`--beta`](#stage-3-predict
 This file contains some interesting statistics (per chromosome and overall). The definition of the Z-scores matches the one from
 the 'ID_segments.bed'. Particularly interesting for NIPT.
 
-# Dependencies
+# Development
 
-- R (v4.3.3) packages
-  - jsonlite (v1.8.8)
-- R Bioconductor packages
-  - DNAcopy (v1.76.0)
-- Python (> v3.6) libraries
-  - scipy (v1.13.0)
-  - scikit-learn (v1.4.2)
-  - pysam (v0.22.0)
-  - numpy (v1.26.4)
-  - matplotlib (v3.8.4)
-  - pandas (2.2.2)
+This project uses [pixi](https://pixi.sh) to manage reproducible environments and [prek](https://github.com/ecklf/prek) (a fast, Rust-based drop-in replacement for `pre-commit`) to enforce code quality via Git hooks.
 
-And of course, other versions are very likely to work as well.
+## Environments
+
+Two pixi environments are defined:
+
+| Environment | Purpose |
+| :---------- | :------ |
+| `default`   | Runtime dependencies only — mirrors a production install |
+| `dev`       | Adds `ruff`, `prek`, and `pytest` on top of the default environment |
+
+Activate the dev environment with:
+
+```bash
+pixi shell -e dev
+```
+
+Or run individual tasks without activating a shell:
+
+```bash
+pixi run -e dev lint   # ruff check src/
+pixi run -e dev fmt    # ruff format src/
+pixi run -e dev test   # pytest
+```
+
+## Git Hooks (prek)
+
+Install prek hooks once after cloning:
+
+```bash
+pixi run -e dev hooks  # runs: prek install
+```
+
+This registers `.pre-commit-config.yaml` as a Git hook via prek. From that point on, `ruff` linting and formatting are checked automatically on every `git commit`.
+
+To run the hooks manually against all files:
+
+```bash
+prek run --all-files
+```
+
