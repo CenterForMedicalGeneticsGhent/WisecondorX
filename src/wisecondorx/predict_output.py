@@ -112,7 +112,14 @@ def _generate_bins_bed(
             feat_str = "{}:{}-{}".format(
                 chr_name, str(feat), str(feat + binsize - 1)
             )
-            row = [chr_name, feat, feat + binsize - 1, feat_str, r, z]
+            row = [
+                chr_name,
+                feat,
+                feat + binsize - 1,
+                feat_str,
+                round(float(r), 4),
+                round(float(z), 4),
+            ]
             bins_file.write("{}\n".format("\t".join([str(x) for x in row])))
             feat += binsize
     bins_file.close()

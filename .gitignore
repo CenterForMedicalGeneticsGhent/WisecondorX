@@ -7,7 +7,9 @@ wisecondorx.egg-info/
 /build/
 /dist/
 **.pyc
-.npz
+*.npz
+*.bed
+*.txt
 # pixi environments
 .pixi/*
 !.pixi/config.toml

@@ -362,7 +362,7 @@ def tool_predict(
         "def", "--ylim", help="y-axis limits for plotting. e.g. [-2,2]"
     ),
     bed: bool = typer.Option(
-        False,
+        True,
         "--bed",
         help="Outputs tab-delimited .bed files, containing the most important information",
         is_flag=True,

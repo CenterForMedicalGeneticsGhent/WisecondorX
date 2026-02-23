@@ -5,7 +5,6 @@ from typing import Dict, Any, List, Tuple, Optional, Union
 
 import numpy as np
 from scipy.stats import norm
-from sklearn.decomposition import PCA
 
 from wisecondorx.overall_tools import exec_R, get_z_score
 
@@ -64,14 +63,18 @@ Project test sample to PCA space.
 def project_pc(
     sample_data: np.ndarray, ref_file: Dict[str, Any], ap: str
 ) -> np.ndarray:
-    pca = PCA(n_components=ref_file["pca_components{}".format(ap)].shape[0])
-    pca.components_ = ref_file["pca_components{}".format(ap)]
-    pca.mean_ = ref_file["pca_mean{}".format(ap)]
+    components = ref_file["pca_components{}".format(ap)]
+    mean = ref_file["pca_mean{}".format(ap)]
 
-    transform = pca.transform(np.array([sample_data]))
+    # Center the data
+    centered = sample_data - mean
 
-    reconstructed = np.dot(transform, pca.components_) + pca.mean_
-    reconstructed = reconstructed[0]
+    # Project to PCA space (equivalent to pca.transform)
+    transform = np.dot(centered, components.T)
+
+    # Reconstruct from PCA space (equivalent to pca.inverse_transform)
+    reconstructed = np.dot(transform, components) + mean
+
     return sample_data / reconstructed
 
 
