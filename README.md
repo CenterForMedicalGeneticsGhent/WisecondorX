@@ -15,9 +15,8 @@ meant to be applicable not only to NIPT, but also gDNA, PGT, FFPE, LQB, ... etc.
 
 # Manual
 
-## Mapping
+## Data preprocessing
 
-We found superior results through WisecondorX when using [bowtie2](https://github.com/BenLangmead/bowtie2) as a mapper.
 Note that it is important that **no** read quality filtering is executed prior to running WisecondorX: this software
 requires low-quality reads to distinguish informative bins from non-informative ones.
 
@@ -70,16 +69,14 @@ WisecondorX convert input.bam/cram output.npz [--optional arguments]
 | <br>Optional argument <br><br> | Function                                                                                                                                                                                                 |
 | :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--reference x`                | Fasta reference to be used with cram inputs                                                                                                                                                              |
-| `--binsize x`                  | Size per bin in bp; the reference bin size should be a multiple of this value. Note that this parameter does not impact the resolution, yet it can be used to optimize processing speed (default: x=5e3) |
-| `--normdup`                    | Use this flag to avoid duplicate removal                                                                                                                                                                 |
-
-&rarr; Bash recipe at `docs/include/pipeline/convert.sh`
+| `--binsize x`                  | Size per bin in bp; the reference bin size should be a multiple of this value. Note that this parameter does not impact the resolution, yet it can be used to optimize processing speed (default: x=5000) |
+| `--rmdup`                    | Set this flag to `false` to avoid removing duplicate reads                                                                                                                                                                 |
 
 ### Stage (2) Create reference
 
 ```bash
 
-WisecondorX newref reference_input_dir/*.npz reference_output.npz [--optional arguments]
+WisecondorX newref reference_input_dir/*.npz reference_prefix [--optional arguments]
 ```
 
 | <br>Optional argument <br><br> | Function                                                                                                                                    |
@@ -90,8 +87,6 @@ WisecondorX newref reference_input_dir/*.npz reference_output.npz [--optional ar
 | `--yfrac x`                    | Y read fraction cutoff, in order to manually define gender. Setting this to 1 will treat all samples as female                              |
 | `--plotyfrac x`                | plots Y read fraction histogram and Gaussian mixture fit to file x, can help when setting `--yfrac` manually; software quits after plotting |
 | `--cpus x`                     | Number of threads requested (default: x=1)                                                                                                  |
-
-&rarr; Bash recipe at `docs/include/pipeline/newref.sh`
 
 ### Stage (3) Predict copy number alterations
 
@@ -109,16 +104,12 @@ WisecondorX predict test_input.npz reference_input.npz output_id [--optional arg
 | `--beta x`                     | When beta is given, `--zscore` is ignored. Beta sets a ratio cutoff for aberration calling. It's a number between 0 (liberal) and 1 (conservative) and, when used, is optimally close to the purity (e.g. fetal/tumor fraction)   |
 | `--blacklist x`                | Blacklist for masking additional regions; requires headerless .bed file. This is particularly useful when the reference set is too small to recognize some obvious loci (such as centromeres; examples at `./example.blacklist/`) |
 | `--gender x`                   | Force WisecondorX to analyze this case as male (M) or female (F). Useful when e.g. dealing with a loss of chromosome Y, which causes erroneous gender predictions (choices: x=F or x=M)                                           |
-| `--bed`                        | Outputs tab-delimited .bed files (trisomy 21 NIPT example at `./example.bed`), containing all necessary information **(\*)**                                                                                                      |
-| `--plot`                       | Outputs custom .png plots (trisomy 21 NIPT example at `./example.plot`), directly interpretable **(\*)**                                                                                                                          |
+| `--bed`                        | Outputs tab-delimited .bed files (trisomy 21 NIPT example at `./example.bed`), containing all necessary information                                                                                                      |
+| `--plot`                       | Outputs custom .png plots (trisomy 21 NIPT example at `./example.plot`), directly interpretable                                                                                                                          |
 | `--regions x`                   |  Mark custom regions on the plot; requires a headerless .bed file. (CNS tumor genes example at `./regions.example`)                                                                        |
 | `--ylim [a,b]`                 | Force WisecondorX to use y-axis interval [a,b] during plotting, e.g. [-2,2]                                                                                                                                                       |
 | `--cairo`                      | Some operating systems require the cairo bitmap type to write plots                                                                                                                                                               |
 | `--seed`| Random seed for segmentation algorithm (default:None)                                                                                                                                                                                  |
-
-<sup>**(\*)** At least one of these output formats should be selected</sup>
-
-&rarr; Bash recipe at `docs/include/pipeline/predict.sh`
 
 ### Additional functionality
 

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 # ── Project metadata (PEP 621) ─────────────────────────────────────────────────
 [project]
 name = "wisecondorx"
-version = "1.2.11"
+dynamic = ["version"]
 description = "WisecondorX -- an evolved WISECONDOR"
 readme = "README.md"
 license = "LicenseRef-by-nc-sa"
@@ -37,17 +37,18 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 dependencies = [
-  "scipy",
-  "scikit-learn",
-  "pysam",
   "numpy",
   "pandas",
+  "pysam",
+  "scikit-learn",
+  "scipy",
+  "typer",
 ]
 
 [project.scripts]
-wisecondorx  = "wisecondorx.main:main"
-WisecondorX  = "wisecondorx.main:main"
-wisecondorX  = "wisecondorx.main:main"
+wisecondorx  = "wisecondorx.main:app"
+WisecondorX  = "wisecondorx.main:app"
+wisecondorX  = "wisecondorx.main:app"
 
 [project.optional-dependencies]
 dev = [
@@ -59,6 +60,9 @@ dev = [
 # ── Setuptools package discovery ───────────────────────────────────────────────
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "wisecondorx.__version__"}
 
 [tool.setuptools.package-data]
 wisecondorx = ["*.R"]
@@ -89,6 +93,7 @@ pysam = ">=0.23.3,<0.24"
 scikit-learn = ">=1.8.0,<2"
 scipy = ">=1.17.0,<2"
 numpy = ">=2.4.2,<3"
+typer = ">=0.24.0,<0.25"
 
 [tool.pixi.pypi-dependencies]
 wisecondorx = { path = ".", editable = true }
