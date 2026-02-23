@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 """
-Scales the bin size of a sample.npz to the one  
+Scales the bin size of a sample.npz to the one
 requested for the reference
 """
 

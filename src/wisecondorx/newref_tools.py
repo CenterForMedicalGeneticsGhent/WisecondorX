@@ -189,7 +189,8 @@ def get_reference(
         chr_data = np.concatenate(
             (
                 pca_corrected_data[
-                    : masked_bins_per_chr_cum[chr] - masked_bins_per_chr[chr], :
+                    : masked_bins_per_chr_cum[chr] - masked_bins_per_chr[chr],
+                    :,
                 ],
                 pca_corrected_data[masked_bins_per_chr_cum[chr] :, :],
             )
@@ -210,7 +211,8 @@ def get_reference(
     samples = np.transpose(pca_corrected_data)
     for null_i, case_i in enumerate(
         random.sample(
-            range(len(pca_corrected_data[0])), min(len(pca_corrected_data[0]), 100)
+            range(len(pca_corrected_data[0])),
+            min(len(pca_corrected_data[0]), 100),
         )
     ):
         sample = samples[case_i]

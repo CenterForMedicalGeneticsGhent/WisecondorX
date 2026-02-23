@@ -83,16 +83,28 @@ def _generate_bins_bed(rem_input, results):
             feat += binsize
     bins_file.close()
 
+
 def _generate_regions_bed(rem_input, results):
     regions_file = open("{}_regions.bed".format(rem_input["args"].outid), "w")
     regions_file.write("chr\tstart\tend\tname\tratio\tzscore\n")
 
     with open(rem_input["args"].regions, "r") as regions_file_handle:
-        regions = [line.strip().split("\t") for line in regions_file_handle if line.strip() != ""]
+        regions = [
+            line.strip().split("\t")
+            for line in regions_file_handle
+            if line.strip() != ""
+        ]
 
         for region in regions:
-            assert len(region) >= 4, "Regions file must have at least 4 columns: chr, start, end, name"
-            chr_name, start, end, name  = region[0], region[1], region[2], region[3]
+            assert len(region) >= 4, (
+                "Regions file must have at least 4 columns: chr, start, end, name"
+            )
+            chr_name, start, end, name = (
+                region[0],
+                region[1],
+                region[2],
+                region[3],
+            )
 
             # Convert chromosome name to zero-based index
             if chr_name == "chrX" or chr_name == "X":
@@ -105,24 +117,27 @@ def _generate_regions_bed(rem_input, results):
             if end_bin >= rem_input["bins_per_chr"][chr]:
                 end_bin = rem_input["bins_per_chr"][chr] - 1
 
-
             if start_bin < 0 or end_bin < 0 or start_bin > end_bin:
-                regions_file.write("Skipping invalid region: {}\n".format("\t".join(region)))
+                regions_file.write(
+                    "Skipping invalid region: {}\n".format("\t".join(region))
+                )
                 continue
-            
+
             # Extract ratios, weights, and z-scores for the region
             region_ratios = results["results_r"][chr][start_bin : end_bin + 1]
             region_weights = results["results_w"][chr][start_bin : end_bin + 1]
             region_zscores = results["results_z"][chr][start_bin : end_bin + 1]
 
             if len(region_ratios) == 0:
-                regions_file.write("Skipping region with no bins: {}\n".format("\t".join(region)))
+                regions_file.write(
+                    "Skipping region with no bins: {}\n".format("\t".join(region))
+                )
                 continue
-            
+
             # Calculate weighted means
             ratio_mean = np.ma.average(region_ratios, weights=region_weights)
             zscore_mean = np.ma.average(region_zscores, weights=region_weights)
-            
+
             if ratio_mean == 0:
                 ratio_mean = "nan"
             if zscore_mean == 0:
@@ -132,6 +147,7 @@ def _generate_regions_bed(rem_input, results):
             regions_file.write("{}\n".format("\t".join([str(x) for x in row])))
 
     regions_file.close()
+
 
 def _generate_segments_and_aberrations_bed(rem_input, results):
     segments_file = open("{}_segments.bed".format(rem_input["args"].outid), "w")
@@ -212,13 +228,13 @@ def _generate_chr_statistics_file(rem_input, results):
     ]
 
     msv = round(
-        get_median_segment_variance(results["results_c"], results["results_r"]), 5
+        get_median_segment_variance(results["results_c"], results["results_r"]),
+        5,
     )
     cpa = round(get_cpa(results["results_c"], rem_input["binsize"]), 5)
     chr_z_scores = get_z_score(results_c_chr, results)
 
     for chr in range(len(results["results_r"])):
-
         chr_name = str(chr + 1)
         if chr_name == "23":
             chr_name = "X"
