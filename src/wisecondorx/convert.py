@@ -9,11 +9,24 @@ import numpy as np
 import pysam
 import typer
 from pathlib import Path
+from dataclasses import dataclass
 
 """
 Converts aligned reads file to numpy array by transforming
 individual reads to counts per bin.
 """
+
+
+@dataclass
+class BamQualityInfo:
+    mapped: int
+    unmapped: int
+    no_coordinate: int
+    filter_rmdup: int
+    filter_mapq: int
+    pre_retro: int
+    post_retro: int
+    pair_fail: int
 
 
 def wcx_convert(
@@ -27,10 +40,8 @@ def wcx_convert(
         "--reference",
         help="Fasta reference to be used during cram conversion",
     ),
-    binsize: int = typer.Option(5e3, "--binsize", help="Bin size (bp)"),
-    normdup: bool = typer.Option(
-        False, "--normdup", help="Do not remove duplicates", is_flag=True
-    ),
+    binsize: int = typer.Option(5000, "--binsize", help="Bin size (bp)"),
+    rmdup: bool = typer.Option(True, "--rmdup", help="Remove duplicates"),
 ) -> None:
     """
     Convert and filter aligned reads to .npz format.
@@ -67,9 +78,9 @@ def wcx_convert(
 
     logging.info("Importing data ...")
 
-    bins_per_chr: dict[str, np.ndarray] = dict()
+    reads_per_chromosome_bin: dict[str, np.ndarray] = dict()
     for chr in range(1, 25):
-        bins_per_chr[str(chr)] = None
+        reads_per_chromosome_bin[str(chr)] = None
 
     reads_seen = 0
     reads_kept = 0
@@ -86,7 +97,7 @@ def wcx_convert(
         if chr_name[:3].lower() == "chr":
             chr_name = chr_name[3:]
         if (
-            chr_name not in bins_per_chr
+            chr_name not in reads_per_chromosome_bin
             and chr_name != "X"
             and chr_name != "Y"
         ):
@@ -114,7 +125,7 @@ def wcx_convert(
                     reads_pairf += 1
                     continue
                 if (
-                    not normdup
+                    rmdup
                     and larp == read.pos
                     and larp2 == read.next_reference_start
                 ):
@@ -130,7 +141,7 @@ def wcx_convert(
                 reads_seen += 1
                 larp = read.pos
             else:
-                if not normdup and larp == read.pos:
+                if rmdup and larp == read.pos:
                     reads_rmdup += 1
                 else:
                     if read.mapping_quality >= 1:
@@ -142,22 +153,25 @@ def wcx_convert(
                 reads_seen += 1
                 larp = read.pos
 
-        bins_per_chr[chr_name] = counts
+        reads_per_chromosome_bin[chr_name] = counts
         reads_kept += sum(counts)
 
-    qual_info = {
-        "mapped": reads_file.mapped,
-        "unmapped": reads_file.unmapped,
-        "no_coordinate": reads_file.nocoordinate,
-        "filter_rmdup": reads_rmdup,
-        "filter_mapq": reads_mapq,
-        "pre_retro": reads_seen,
-        "post_retro": reads_kept,
-        "pair_fail": reads_pairf,
-    }
+    qual_info = BamQualityInfo(
+        mapped=reads_file.mapped,
+        unmapped=reads_file.unmapped,
+        no_coordinate=reads_file.nocoordinate,
+        filter_rmdup=reads_rmdup,
+        filter_mapq=reads_mapq,
+        pre_retro=reads_seen,
+        post_retro=reads_kept,
+        pair_fail=reads_pairf,
+    )
 
     np.savez_compressed(
-        outfile, binsize=binsize, sample=bins_per_chr, quality=qual_info
+        outfile,
+        binsize=binsize,
+        sample=reads_per_chromosome_bin,
+        quality=qual_info,
     )
 
     logging.info("Finished conversion")

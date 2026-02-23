@@ -88,22 +88,17 @@ def wcx_predict(
         True,
         "--bed",
         help="Outputs tab-delimited .bed files, containing the most important information",
-        is_flag=True,
     ),
-    plot: bool = typer.Option(
-        False, "--plot", help="Outputs .png plots", is_flag=True
-    ),
+    plot: bool = typer.Option(False, "--plot", help="Outputs .png plots"),
     cairo: bool = typer.Option(
         False,
         "--cairo",
         help="Uses cairo bitmap type for plotting. Might be necessary for certain setups.",
-        is_flag=True,
     ),
     add_plot_title: bool = typer.Option(
         False,
         "--add-plot-title",
         help="Add the output name as plot title",
-        is_flag=True,
     ),
     seed: Optional[int] = typer.Option(
         None, "--seed", help="Seed for segmentation algorithm"

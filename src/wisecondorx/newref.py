@@ -7,7 +7,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Annotated
 
 import numpy as np
 from concurrent import futures
@@ -267,18 +267,19 @@ def wcx_newref(
         ...,
         help="Path to all reference data files (e.g. path/to/reference/*.npz)",
     ),
-    outfile: Path = typer.Argument(
+    prefix: Path = typer.Argument(
         ...,
-        help="Path and filename for the reference output (e.g. path/to/myref.npz)",
+        help="Prefix for the reference output (e.g. path/to/myref)",
     ),
-    nipt: bool = typer.Option(
-        False, "--nipt", help="Use flag for NIPT", is_flag=True
-    ),
-    yfrac: float = typer.Option(
-        None,
-        "--yfrac",
-        help="Use to manually set the Y read fraction cutoff, which defines gender",
-    ),
+    nipt: bool = typer.Option(False, "--nipt", help="Use flag for NIPT"),
+    yfrac: Annotated[
+        float,
+        typer.Option(
+            min=0.0,
+            max=1.0,
+            help="Use to manually set the Y read fraction cutoff, which defines gender",
+        ),
+    ] = None,
     plotyfrac: Path = typer.Option(
         None,
         "--plotyfrac",
@@ -287,9 +288,9 @@ def wcx_newref(
     refsize: int = typer.Option(
         300, "--refsize", help="Amount of reference locations per target"
     ),
-    binsize: int = int(
-        1e5
-    ),  # Cannot use scientific notation as default for Typer Option int
+    target_binsize: int = typer.Option(
+        5000, "--binsize", help="Size of target bins in base pairs"
+    ),
     cpus: int = typer.Option(
         1, "--cpus", help="Use multiple cores to find reference bins"
     ),
@@ -297,29 +298,16 @@ def wcx_newref(
     """
     Create a new reference using healthy reference samples.
     """
-    # Fix the binsize type from typer, because 1e5 is float
-    binsize_val = int(binsize)
 
     logging.info("Creating new reference")
 
-    if yfrac is not None:
-        if yfrac < 0 or yfrac > 1:
-            logging.critical(
-                "Parameter --yfrac should be a positive number lower than or equal to 1"
-            )
-            sys.exit(1)
-
-    split_path = list(os.path.split(outfile))
-    if split_path[-1].endswith(".npz"):
-        split_path[-1] = split_path[-1][:-4]
-
-    basepath = os.path.join(split_path[0], split_path[1])
-    prepfile = f"{basepath}_prep.npz"
-    prepdatafile = f"{basepath}_prep_data.npy"
-    partfile = f"{basepath}_part"
-    tmpoutfile_A = f"{basepath}.tmp.A.npz"
-    tmpoutfile_F = f"{basepath}.tmp.F.npz"
-    tmpoutfile_M = f"{basepath}.tmp.M.npz"
+    outfile = Path(prefix, ".npz")
+    prepfile = Path(prefix, "_prep.npz")
+    prepdatafile = Path(prefix, "_prep_data.npy")
+    partfile = Path(prefix, "_part")
+    tmpoutfile_A = Path(prefix, ".tmp.A.npz")
+    tmpoutfile_F = Path(prefix, ".tmp.F.npz")
+    tmpoutfile_M = Path(prefix, ".tmp.M.npz")
 
     samples: list[dict[str, np.ndarray]] = []
     logging.info("Importing data ...")
@@ -327,9 +315,8 @@ def wcx_newref(
         logging.info(f"Loading: {infile}")
         npzdata = np.load(infile, encoding="latin1", allow_pickle=True)
         sample = npzdata["sample"].item()
-        b_size = int(npzdata["binsize"])
-        logging.info(f"Binsize: {int(b_size)}")
-        samples.append(scale_sample(sample, b_size, binsize_val))
+        source_binsize = int(npzdata["binsize"])
+        samples.append(scale_sample(sample, source_binsize, target_binsize))
 
     samples_array = np.array(samples)
     genders, trained_cutoff = train_gender_model(
@@ -362,7 +349,7 @@ def wcx_newref(
         tool_newref_prep(
             prepdatafile=prepdatafile,
             prepfile=prepfile,
-            binsize=binsize_val,
+            binsize=target_binsize,
             samples=samples_array,
             gender="A",
             mask=total_mask,
@@ -389,7 +376,7 @@ def wcx_newref(
         tool_newref_prep(
             prepdatafile=prepdatafile,
             prepfile=prepfile,
-            binsize=binsize_val,
+            binsize=target_binsize,
             samples=samples_array[np.array(genders) == "F"],
             gender="F",
             mask=total_mask,
@@ -416,7 +403,7 @@ def wcx_newref(
             tool_newref_prep(
                 prepdatafile=prepdatafile,
                 prepfile=prepfile,
-                binsize=binsize_val,
+                binsize=target_binsize,
                 samples=samples_array[np.array(genders) == "M"],
                 gender="M",
                 mask=total_mask,
@@ -447,8 +434,8 @@ def wcx_newref(
 
 def train_gender_model(
     samples: np.ndarray,
-    yfrac: Optional[float] = None,
-    plotyfrac: Optional[str] = None,
+    yfrac: float = None,
+    plotyfrac: str = None,
 ) -> tuple[list[str], float]:
     genders = np.empty(len(samples), dtype="object")
     y_fractions = []
