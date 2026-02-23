@@ -9,7 +9,11 @@ import time
 import numpy as np
 from concurrent import futures
 
-from wisecondorx.newref_tools import normalize_and_mask, train_pca, get_reference
+from wisecondorx.newref_tools import (
+    normalize_and_mask,
+    train_pca,
+    get_reference,
+)
 
 """
 Outputs preparation files of read depth normalized
@@ -179,7 +183,7 @@ def force_remove(file_id):
         try:
             os.remove(file_id)
             break
-        except:
+        except Exception:
             print(
                 "Attemp #{}: Cannot remove {}, because it is busy, trying again...".format(
                     attemp, file_id

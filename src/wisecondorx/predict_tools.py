@@ -37,7 +37,8 @@ def coverage_normalize_and_mask(sample, ref_file, ap):
     for chr in chrs:
         this_chr = np.zeros(ref_file["bins_per_chr{}".format(ap)][chr - 1], dtype=float)
         min_len = min(
-            ref_file["bins_per_chr{}".format(ap)][chr - 1], len(sample[str(chr)])
+            ref_file["bins_per_chr{}".format(ap)][chr - 1],
+            len(sample[str(chr)]),
         )
         this_chr[:min_len] = sample[str(chr)][:min_len]
         by_chr.append(this_chr)
@@ -228,7 +229,10 @@ def _import_bed(rem_input):
         if chr not in bed.keys():
             bed[chr] = []
         bed[chr].append(
-            [int(int(s) / rem_input["binsize"]), int(int(e) / rem_input["binsize"]) + 1]
+            [
+                int(int(s) / rem_input["binsize"]),
+                int(int(e) / rem_input["binsize"]) + 1,
+            ]
         )
     return bed
 
