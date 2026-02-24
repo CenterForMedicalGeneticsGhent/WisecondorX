@@ -9,6 +9,7 @@ import numpy as np
 class Sex(Enum):
     MALE = "M"
     FEMALE = "F"
+    AUTOSOMAL = "A"
 
 
 def scale_sample(

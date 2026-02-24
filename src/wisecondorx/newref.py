@@ -14,7 +14,7 @@ from sklearn.decomposition import PCA
 from sklearn.mixture import GaussianMixture
 import typer
 
-from wisecondorx.utils import scale_sample, sex_correct
+from wisecondorx.utils import scale_sample, sex_correct, Sex
 
 
 def wcx_newref(
@@ -224,7 +224,7 @@ def tool_newref_prep(
     np.savez_compressed(
         prepfile,
         binsize=binsize,
-        gender=sex,
+        sex=sex,
         mask=mask,
         bins_per_chr=bins_per_chr,
         masked_bins_per_chr=masked_bins_per_chr,
@@ -346,7 +346,7 @@ def tool_newref_post(
     np.savez_compressed(
         tmpoutfile,
         binsize=npzdata_prep["binsize"].item(),
-        gender=npzdata_prep["gender"].item(),
+        sex=npzdata_prep["sex"].item(),
         mask=npzdata_prep["mask"],
         bins_per_chr=npzdata_prep["bins_per_chr"],
         masked_bins_per_chr=npzdata_prep["masked_bins_per_chr"],
@@ -389,12 +389,12 @@ def tool_newref_merge(
     final_ref = {"has_female": False, "has_male": False}
     for file_id in outfiles:
         npz_file = np.load(file_id, encoding="latin1", allow_pickle=True)
-        sex = str(npz_file["gender"])
-        for component in [x for x in npz_file.keys() if x != "gender"]:
-            if sex == "F":
+        sex = Sex(npz_file["sex"])
+        for component in [x for x in npz_file.keys() if x != "sex"]:
+            if sex == Sex.FEMALE:
                 final_ref["has_female"] = True
                 final_ref["{}.F".format(str(component))] = npz_file[component]
-            elif sex == "M":
+            elif sex == Sex.MALE:
                 final_ref["has_male"] = True
                 final_ref["{}.M".format(str(component))] = npz_file[component]
             else:

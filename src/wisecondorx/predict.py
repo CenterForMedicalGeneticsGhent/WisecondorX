@@ -13,8 +13,8 @@ import typer
 
 import re
 from wisecondorx.utils import (
-    sex_correct,
     scale_sample,
+    Sex,
 )
 from wisecondorx.plotter import create_plots
 
@@ -28,14 +28,12 @@ def wcx_sex(
     ),
 ) -> None:
     """
-    Returns the gender of a .npz resulting from convert, based on a Gaussian mixture model trained during the newref phase.
+    Returns the sex of a .npz resulting from convert, based on a Gaussian mixture model trained during the newref phase.
     """
     ref_file = np.load(reference, encoding="latin1", allow_pickle=True)
     sample_file = np.load(infile, encoding="latin1", allow_pickle=True)
-    gender = predict_gender(
-        sample_file["sample"].item(), ref_file["trained_cutoff"]
-    )
-    if gender == "M":
+    sex = predict_sex(sample_file["sample"].item(), ref_file["trained_cutoff"])
+    if sex == "M":
         print("male")
     else:
         print("female")
@@ -46,7 +44,7 @@ def wcx_predict(
     reference: Path = typer.Argument(
         ..., help="Reference .npz, as previously created with newref"
     ),
-    prefix: str = typer.Argument(
+    prefix: Path = typer.Argument(
         ...,
         help="Basename (w/o extension) of output files (paths are allowed, e.g. path/to/ID_1)",
     ),
@@ -85,9 +83,9 @@ def wcx_predict(
         "--blacklist",
         help="Blacklist that masks regions in output, structure of header-less file: chr...(/t)startpos(/t)endpos(/n)",
     ),
-    gender_override: Optional[str] = typer.Option(
+    sex_override: Sex = typer.Option(
         None,
-        "--gender",
+        "--sex",
         help="Force WisecondorX to analyze this case as a male (M) or a female (F)",
     ),
     ylim: str = typer.Option(
@@ -140,16 +138,11 @@ def wcx_predict(
         sample, int(sample_file["binsize"].item()), ref_binsize
     )
 
-    gender = predict_gender(sample, ref_file["trained_cutoff"])
+    sex = predict_sex(sample, ref_file["trained_cutoff"])
     if not ref_file["is_nipt"]:
-        if gender_override:
-            gender = gender_override
-        sample = sex_correct(sample, gender)
-        ref_gender = gender
-    else:
-        if gender_override:
-            gender = gender_override
-        ref_gender = "F"
+        if sex_override:
+            sex = sex_override
+        ref_sex = Sex.FEMALE
 
     logging.info("Normalizing autosomes ...")
 
@@ -157,25 +150,25 @@ def wcx_predict(
         maskrepeats=maskrepeats,
         sample=sample,
         ref_file=ref_file,
-        ref_gender="A",
+        ref_sex=Sex.AUTOSOMAL,
     )
 
     if not ref_file["is_nipt"]:
-        if not ref_file["has_male"] and gender == "M":
+        if not ref_file["has_male"] and sex == Sex.MALE:
             logging.warning(
                 "This sample is male, whilst the reference is created with fewer than 5 males. The female gonosomal reference will be used for X predictions."
             )
-            ref_gender = "F"
-        elif not ref_file["has_female"] and gender == "F":
+            ref_sex = Sex.FEMALE
+        elif not ref_file["has_female"] and sex == Sex.FEMALE:
             logging.warning(
                 "This sample is female, whilst the reference is created with fewer than 5 females. The male gonosomal reference will be used for XY predictions."
             )
-            ref_gender = "M"
+            ref_sex = Sex.MALE
 
     logging.info("Normalizing gonosomes ...")
 
     null_ratios_aut_per_bin = ref_file["null_ratios"]
-    null_ratios_gon_per_bin = ref_file[f"null_ratios.{ref_gender}"][
+    null_ratios_gon_per_bin = ref_file[f"null_ratios.{ref_sex}"][
         len(null_ratios_aut_per_bin) :
     ]
 
@@ -183,21 +176,21 @@ def wcx_predict(
         maskrepeats=maskrepeats,
         sample=sample,
         ref_file=ref_file,
-        ref_gender=ref_gender,
+        ref_sex=ref_sex,
     )
 
     wd = os.getcwd()
-    bpc = ref_file[f"bins_per_chr.{ref_gender}"]
-    mbpc = ref_file[f"masked_bins_per_chr.{ref_gender}"]
-    mbpcc = ref_file[f"masked_bins_per_chr_cum.{ref_gender}"]
-    ref_mask = ref_file[f"mask.{ref_gender}"]
+    bpc = ref_file[f"bins_per_chr.{ref_sex}"]
+    mbpc = ref_file[f"masked_bins_per_chr.{ref_sex}"]
+    mbpcc = ref_file[f"masked_bins_per_chr_cum.{ref_sex}"]
+    ref_mask = ref_file[f"mask.{ref_sex}"]
 
     rem_input: Dict[str, Any] = {
         "wd": wd,
         "binsize": ref_binsize,
         "n_reads": n_reads,
-        "ref_gender": ref_gender,
-        "gender": gender,
+        "ref_sex": ref_sex,
+        "sex": sex,
         "mask": ref_mask,
         "bins_per_chr": bpc,
         "masked_bins_per_chr": mbpc,
@@ -260,7 +253,7 @@ def wcx_predict(
         alpha=alpha,
         seed=seed,
         wd=wd,
-        ref_gender=ref_gender,
+        ref_sex=ref_sex,
         binsize=ref_binsize,
         results=results,
     )
@@ -272,10 +265,10 @@ def wcx_predict(
             binsize=ref_binsize,
             regions=regions,
             bins_per_chr=bpc,
-            ref_gender=ref_gender,
+            ref_sex=ref_sex,
             beta=beta,
             zscore=zscore,
-            gender=gender,
+            sex=sex,
             n_reads=n_reads,
             results=results,
         )
@@ -285,7 +278,7 @@ def wcx_predict(
         exec_write_plots(
             prefix=prefix,
             wd=wd,
-            ref_gender=ref_gender,
+            ref_sex=ref_sex,
             beta=beta,
             zscore=zscore,
             binsize=ref_binsize,
@@ -300,32 +293,26 @@ def wcx_predict(
     logging.info("Finished prediction")
 
 
-"""
-Returns gender based on Gaussian mixture
-model trained during newref phase.
-"""
-
-
-def predict_gender(
-    sample: Dict[str, np.ndarray], trained_cutoff: float
-) -> str:
+def predict_sex(sample: Dict[str, np.ndarray], trained_cutoff: float) -> Sex:
+    """
+    Returns sex based on Gaussian mixture
+    model trained during newref phase.
+    """
     Y_fraction = float(np.sum(sample["24"])) / float(
         np.sum([np.sum(sample[x]) for x in sample.keys()])
     )
     if Y_fraction > trained_cutoff:
-        return "M"
+        return Sex.MALE
     else:
-        return "F"
-
-
-"""
-Normalize sample for read depth and apply mask.
-"""
+        return Sex.FEMALE
 
 
 def coverage_normalize_and_mask(
     sample: Dict[str, np.ndarray], ref_file: Dict[str, Any], ap: str
 ) -> np.ndarray:
+    """
+    Normalize sample for read depth and apply mask.
+    """
     by_chr = []
 
     chrs = range(1, len(ref_file["bins_per_chr{}".format(ap)]) + 1)
@@ -347,14 +334,12 @@ def coverage_normalize_and_mask(
     return masked_data
 
 
-"""
-Project test sample to PCA space.
-"""
-
-
 def project_pc(
     sample_data: np.ndarray, ref_file: Dict[str, Any], ap: str
 ) -> np.ndarray:
+    """
+    Project test sample to PCA space.
+    """
     components = ref_file["pca_components{}".format(ap)]
     mean = ref_file["pca_mean{}".format(ap)]
 
@@ -370,13 +355,11 @@ def project_pc(
     return sample_data / reconstructed
 
 
-"""
-Defines cutoff that will add bins to a blacklist
-depending on the within reference distances.
-"""
-
-
 def get_optimal_cutoff(ref_file: Dict[str, Any], repeats: int) -> float:
+    """
+    Defines cutoff that will add bins to a blacklist
+    depending on the within reference distances.
+    """
     distances = ref_file["distances"]
     cutoff = float("inf")
     for i in range(0, repeats):
@@ -387,15 +370,6 @@ def get_optimal_cutoff(ref_file: Dict[str, Any], repeats: int) -> float:
     return cutoff
 
 
-"""
-Within sample normalization. Cycles through a number
-of repeats where z-scores define whether a bin is seen
-as 'normal' in a sample (in most cases this means
-'non-aberrant') -- if it is, it can be used as a
-reference for the other bins.
-"""
-
-
 def normalize_repeat(
     test_data: np.ndarray,
     ref_file: Dict[str, Any],
@@ -404,6 +378,13 @@ def normalize_repeat(
     cp: int,
     ap: str,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
+    """
+    Within sample normalization. Cycles through a number
+    of repeats where z-scores define whether a bin is seen
+    as 'normal' in a sample (in most cases this means
+    'non-aberrant') -- if it is, it can be used as a
+    reference for the other bins.
+    """
     results_z: Optional[np.ndarray] = None
     results_r: Optional[np.ndarray] = None
     ref_sizes: Optional[np.ndarray] = None
@@ -568,11 +549,11 @@ def _import_bed(
 
 
 def exec_cbs(
-    prefix: str,
+    prefix: Path,
     alpha: float,
     seed: int,
-    wd: str,
-    ref_gender: str,
+    wd: Path,
+    ref_sex: Sex,
     binsize: int,
     results: Dict[str, Any],
 ) -> List[List[Any]]:
@@ -580,18 +561,18 @@ def exec_cbs(
     Executed CBS on results_r using results_w as weights.
     Calculates segmental zz-scores.
     """
-    json_cbs_dir = os.path.abspath(prefix + "_CBS_tmp")
+    json_cbs_dir = Path(prefix, "_CBS_tmp")
 
     json_dict = {
-        "R_script": str("{}/include/CBS.R".format(wd)),
-        "ref_gender": str(ref_gender),
-        "alpha": str(alpha),
-        "binsize": str(binsize),
-        "seed": str(seed),
+        "R_script": str(Path(wd, "include/CBS.R")),
+        "ref_sex": ref_sex,
+        "alpha": alpha,
+        "binsize": binsize,
+        "seed": seed,
         "results_r": results["results_r"],
         "results_w": results["results_w"],
-        "infile": str("{}_01.json".format(json_cbs_dir)),
-        "outfile": str("{}_02.json".format(json_cbs_dir)),
+        "infile": str(Path(json_cbs_dir, "_01.json")),
+        "outfile": str(Path(json_cbs_dir, "_02.json")),
     }
 
     results_c = _get_processed_cbs(exec_cbs(json_dict))
@@ -621,7 +602,7 @@ def normalize(
     maskrepeats: int,
     sample: Dict[str, np.ndarray],
     ref_file: Dict[str, Any],
-    ref_gender: str,
+    ref_sex: Sex,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float]:
     """
     Control function that executes following
@@ -631,12 +612,12 @@ def normalize(
     - within-sample normalization
     """
 
-    if ref_gender == "A":
+    if ref_sex == Sex.AUTOSOMAL:
         ap = ""
         cp = 0
         ct = 0
     else:
-        ap = ".{}".format(ref_gender)
+        ap = ".{}".format(ref_sex)
         cp = 22
         ct = ref_file["masked_bins_per_chr_cum{}".format(ap)][cp - 1]
 
@@ -680,9 +661,9 @@ def get_post_processed_result(
 
 
 def exec_write_plots(
-    prefix: str,
+    prefix: Path,
     wd: str,
-    ref_gender: str,
+    ref_sex: Sex,
     beta: float,
     zscore: float,
     binsize: int,
@@ -697,12 +678,12 @@ def exec_write_plots(
     Writes plots.
     """
 
-    plot_title = str(os.path.basename(prefix)) if add_plot_title else ""
+    plot_title = str(prefix.name) if add_plot_title else ""
     out_dir = f"{prefix}.plots"
 
     create_plots(
         out_dir=out_dir,
-        ref_gender=ref_gender,
+        ref_sex=ref_sex,
         beta=beta,
         zscore=zscore,
         binsize=binsize,
@@ -724,32 +705,32 @@ writes tables.
 
 
 def generate_output_tables(
-    prefix: str,
+    prefix: Path,
     binsize: int,
     regions: str,
     bins_per_chr: list,
-    ref_gender: str,
+    ref_sex: Sex,
     beta: float,
     zscore: float,
-    gender: str,
+    sex: Sex,
     n_reads: int,
     results: Dict[str, Any],
 ) -> None:
     _generate_bins_bed(prefix, binsize, results)
     _generate_segments_and_aberrations_bed(
-        prefix, binsize, ref_gender, beta, zscore, results
+        prefix, binsize, ref_sex, beta, zscore, results
     )
     _generate_chr_statistics_file(
-        prefix, bins_per_chr, binsize, gender, n_reads, results
+        prefix, bins_per_chr, binsize, sex, n_reads, results
     )
     if regions is not None:
         _generate_regions_bed(prefix, binsize, regions, bins_per_chr, results)
 
 
 def _generate_bins_bed(
-    prefix: str, binsize: int, results: Dict[str, Any]
+    prefix: Path, binsize: int, results: Dict[str, Any]
 ) -> None:
-    bins_file = open("{}_bins.bed".format(prefix), "w")
+    bins_file = open(Path(prefix, "_bins.bed"), "w")
     bins_file.write("chr\tstart\tend\tid\tratio\tzscore\n")
     results_r = results["results_r"]
     results_z = results["results_z"]
@@ -786,13 +767,13 @@ def _generate_bins_bed(
 
 
 def _generate_regions_bed(
-    prefix: str,
+    prefix: Path,
     binsize: int,
     regions_path: str,
     bins_per_chr: List[int],
     results: Dict[str, Any],
 ) -> None:
-    regions_file = open("{}_regions.bed".format(prefix), "w")
+    regions_file = open(Path(prefix, "_regions.bed"), "w")
     regions_file.write("chr\tstart\tend\tname\tratio\tzscore\n")
 
     with open(regions_path, "r") as regions_file_handle:
@@ -859,15 +840,15 @@ def _generate_regions_bed(
 
 
 def _generate_segments_and_aberrations_bed(
-    prefix: str,
+    prefix: Path,
     binsize: int,
-    ref_gender: str,
+    ref_sex: Sex,
     beta: float,
     zscore: float,
     results: Dict[str, Any],
 ) -> None:
-    segments_file = open("{}_segments.bed".format(prefix), "w")
-    aberrations_file = open("{}_aberrations.bed".format(prefix), "w")
+    segments_file = open(Path(prefix, "_segments.bed"), "w")
+    aberrations_file = open(Path(prefix, "_aberrations.bed"), "w")
     segments_file.write("chr\tstart\tend\tratio\tzscore\n")
     aberrations_file.write("chr\tstart\tend\tratio\tzscore\ttype\n")
 
@@ -887,7 +868,7 @@ def _generate_segments_and_aberrations_bed(
         segments_file.write("{}\n".format("\t".join([str(x) for x in row])))
 
         ploidy = 2
-        if (chr_name == "X" or chr_name == "Y") and ref_gender == "M":
+        if (chr_name == "X" or chr_name == "Y") and ref_sex == Sex.MALE:
             ploidy = 1
         if beta is not None:
             if float(segment[4]) > __get_aberration_cutoff(beta, ploidy)[1]:
@@ -921,14 +902,14 @@ def __get_aberration_cutoff(beta: float, ploidy: int) -> Tuple[float, float]:
 
 
 def _generate_chr_statistics_file(
-    prefix: str,
+    prefix: Path,
     bins_per_chr: List[int],
     binsize: int,
-    gender: str,
+    sex: Sex,
     n_reads: int,
     results: Dict[str, Any],
 ) -> None:
-    stats_file = open("{}_statistics.txt".format(prefix), "w")
+    stats_file = open(Path(prefix, "_statistics.txt"), "w")
     stats_file.write("chr\tratio.mean\tratio.median\tzscore\n")
     chr_ratio_means = [
         np.ma.average(
@@ -972,8 +953,8 @@ def _generate_chr_statistics_file(
         stats_file.write("\t".join([str(x) for x in row]) + "\n")
 
     stats_file.write(
-        "Gender based on --yfrac (or manually overridden by --gender): {}\n".format(
-            str(gender)
+        "Sex based on --yfrac (or manually overridden by --sex): {}\n".format(
+            str(sex)
         )
     )
 

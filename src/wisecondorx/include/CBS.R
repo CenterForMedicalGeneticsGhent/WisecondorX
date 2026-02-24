@@ -22,12 +22,12 @@ input <- read_json(in.file)
 ratio <- as.numeric(unlist(input$results_r))
 weights <- as.numeric(unlist(input$results_w))
 seed <- as.numeric(input$seed)
-gender <- input$ref_gender
+sex <- input$ref_sex
 alpha <- as.numeric(input$alpha)
 binsize <- as.numeric(input$binsize)
 out.file <- as.character(input$outfile)
 
-if (gender == "M"){
+if (sex == "M"){
     chrs = 1:24
 } else {
     chrs = 1:23

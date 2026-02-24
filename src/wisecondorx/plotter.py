@@ -5,6 +5,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.gridspec as gridspec
+from wisecondorx.utils import Sex
 
 # Define colors
 COLOR_BLACK = "#3f3f3f"
@@ -31,7 +32,7 @@ def format_n_reads(n_reads: int) -> str:
 
 def create_plots(
     out_dir: str,
-    ref_gender: str,
+    ref_sex: Sex,
     beta: float,
     zscore: float,
     binsize: int,
@@ -58,7 +59,7 @@ def create_plots(
     ratios = []
     weights = []
 
-    chrs = list(range(1, 25)) if ref_gender == "M" else list(range(1, 24))
+    chrs = list(range(1, 25)) if ref_sex == Sex.MALE else list(range(1, 24))
 
     bins_per_chr = []
     for c in chrs:
@@ -151,7 +152,7 @@ def create_plots(
         height = float(ab[4])
 
         ploidy = 2
-        if (c_idx == 23 or c_idx == 24) and ref_gender == "M":
+        if (c_idx == 23 or c_idx == 24) and ref_sex == Sex.MALE:
             ploidy = 1
 
         if beta is not None:
@@ -259,7 +260,7 @@ def create_plots(
     genome_len = chr_ends[-1]
     autosome_len = chr_ends[22] if len(chr_ends) > 22 else genome_len
 
-    if ref_gender == "F":
+    if ref_sex == Sex.FEMALE:
         plot_constitutionals(
             ax_main, 2, -genome_len * 0.025, genome_len * 1.025
         )
@@ -398,7 +399,7 @@ def create_plots(
     ax_box.get_ylim()
     # constitutionals for boxplots
     plot_constitutionals(ax_box, 2, 0, autosome_len)
-    if ref_gender == "F":
+    if ref_sex == Sex.FEMALE:
         plot_constitutionals(ax_box, 2, autosome_len, genome_len)
     else:
         plot_constitutionals(ax_box, 1, autosome_len, genome_len)
@@ -499,7 +500,7 @@ def create_plots(
 
         # Constitutionals
         ploidy_c = 2
-        if (c == 23 or c == 24) and ref_gender == "M":
+        if (c == 23 or c == 24) and ref_sex == Sex.MALE:
             ploidy_c = 1
         plot_constitutionals(
             ax,

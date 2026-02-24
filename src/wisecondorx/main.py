@@ -12,7 +12,7 @@ VERSION: str = __version__
 
 app = typer.Typer(
     name="wisecondorx",
-    help="WisecondorX: Copy Number Aberration detection from shallow Whole Genome Sequencing data.",
+    help="WisecondorX: Copy Number Aberration detection from Whole Genome Sequencing data.",
     add_completion=False,
 )
 
