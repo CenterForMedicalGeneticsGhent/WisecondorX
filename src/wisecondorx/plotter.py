@@ -1,11 +1,11 @@
 import os
 import math
 import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.gridspec as gridspec
 from wisecondorx.utils import Sex
+from pathlib import Path
 
 # Define colors
 COLOR_BLACK = "#3f3f3f"
@@ -19,25 +19,13 @@ COLOR_BB = "#E3C88ACC"
 COLOR_CC = "#8DD1C6CC"
 
 
-def get_aberration_cutoff(beta: float, ploidy: int) -> tuple[float, float]:
-    loss_cutoff = math.log2((ploidy - (beta / 2)) / ploidy)
-    gain_cutoff = math.log2((ploidy + (beta / 2)) / ploidy)
-    return loss_cutoff, gain_cutoff
-
-
-def format_n_reads(n_reads: int) -> str:
-    # formatted with dots thousands separator
-    return f"{n_reads:,}".replace(",", ".")
-
-
-def create_plots(
-    out_dir: str,
+def write_plots(
+    out_dir: Path,
     ref_sex: Sex,
     beta: float,
     zscore: float,
     binsize: int,
     n_reads: int,
-    cairo_flag: bool,
     ylim_str: str,
     regions_file: str,
     plot_title: str,
@@ -45,17 +33,7 @@ def create_plots(
     results_w: list[list[float]],
     results_c: list[list[float]],
 ):
-    if cairo_flag:
-        matplotlib.use("cairo")
-    else:
-        matplotlib.use("Agg")
-
     os.makedirs(out_dir, exist_ok=True)
-
-    n_reads_str = format_n_reads(n_reads)
-
-    # Flatten ratios and weights (R code treats them as flat arrays + NAs for 0s)
-    # R script: ratio <- unlist(input$results_r); ratio[which(ratio == 0)] <- NA
     ratios = []
     weights = []
 
@@ -156,10 +134,11 @@ def create_plots(
             ploidy = 1
 
         if beta is not None:
-            l_cut, g_cut = get_aberration_cutoff(beta, ploidy)
-            if height < l_cut:
+            loss_cutoff = math.log2((ploidy - (beta / 2)) / ploidy)
+            gain_cutoff = math.log2((ploidy + (beta / 2)) / ploidy)
+            if height < loss_cutoff:
                 dot_cols[start:end] = COLOR_B
-            if height > g_cut:
+            if height > gain_cutoff:
                 dot_cols[start:end] = COLOR_C
         else:
             if np.isnan(z):
@@ -445,7 +424,7 @@ def create_plots(
             [0],
             marker="None",
             color="w",
-            label=f"Number of reads: {n_reads_str}",
+            label=f"Number of reads: {n_reads}",
         ),
     ]
     ax_main.legend(

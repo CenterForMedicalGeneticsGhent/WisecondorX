@@ -5,18 +5,17 @@ import math
 import sys
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional, Union, Annotated
-
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
 import typer
-
+from dataclasses import dataclass
 import re
 from wisecondorx.utils import (
     scale_sample,
     Sex,
 )
-from wisecondorx.plotter import create_plots
+from wisecondorx.plotter import write_plots
 
 import logging
 
@@ -33,10 +32,12 @@ def wcx_sex(
     ref_file = np.load(reference, encoding="latin1", allow_pickle=True)
     sample_file = np.load(infile, encoding="latin1", allow_pickle=True)
     sex = predict_sex(sample_file["sample"].item(), ref_file["trained_cutoff"])
-    if sex == "M":
-        print("male")
+    if sex == Sex.MALE:
+        print("Male")
+    elif sex == Sex.FEMALE:
+        print("Female")
     else:
-        print("female")
+        print("Unknown")
 
 
 def wcx_predict(
@@ -96,24 +97,19 @@ def wcx_predict(
         "--bed",
         help="Outputs tab-delimited .bed files, containing the most important information",
     ),
-    plot: bool = typer.Option(False, "--plot", help="Outputs .png plots"),
-    cairo: bool = typer.Option(
-        False,
-        "--cairo",
-        help="Uses cairo bitmap type for plotting. Might be necessary for certain setups.",
-    ),
+    plot: bool = typer.Option(False, "--plot", help="Output .png plots"),
     add_plot_title: bool = typer.Option(
         False,
         "--add-plot-title",
         help="Add the output name as plot title",
     ),
-    seed: Optional[int] = typer.Option(
+    seed: int = typer.Option(
         None, "--seed", help="Seed for segmentation algorithm"
     ),
-    regions: Optional[str] = typer.Option(
+    regions: Path = typer.Option(
         None,
         "--regions",
-        help="List of regions to be marked on the output plot",
+        help="bed file with regions to be marked on the output plot",
     ),
 ) -> None:
     """
@@ -179,14 +175,12 @@ def wcx_predict(
         ref_sex=ref_sex,
     )
 
-    wd = os.getcwd()
     bpc = ref_file[f"bins_per_chr.{ref_sex}"]
     mbpc = ref_file[f"masked_bins_per_chr.{ref_sex}"]
     mbpcc = ref_file[f"masked_bins_per_chr_cum.{ref_sex}"]
     ref_mask = ref_file[f"mask.{ref_sex}"]
 
     rem_input: Dict[str, Any] = {
-        "wd": wd,
         "binsize": ref_binsize,
         "n_reads": n_reads,
         "ref_sex": ref_sex,
@@ -248,11 +242,10 @@ def wcx_predict(
 
     # results_c is a list of lists, where each inner list is a segment
     # each segment is a list of 4 values: [chr, start, end, log2_ratio]
-    results["results_c"] = exec_cbs(
+    results["results_c"] = run_cbs(
         prefix=prefix,
         alpha=alpha,
         seed=seed,
-        wd=wd,
         ref_sex=ref_sex,
         binsize=ref_binsize,
         results=results,
@@ -260,7 +253,7 @@ def wcx_predict(
 
     if bed:
         logging.info("Writing tables ...")
-        generate_output_tables(
+        write_tables(
             prefix=prefix,
             binsize=ref_binsize,
             regions=regions,
@@ -275,19 +268,19 @@ def wcx_predict(
 
     if plot:
         logging.info("Writing plots ...")
-        exec_write_plots(
-            prefix=prefix,
-            wd=wd,
+        write_plots(
+            out_dir=Path(prefix, ".plots"),
             ref_sex=ref_sex,
             beta=beta,
             zscore=zscore,
             binsize=ref_binsize,
             n_reads=n_reads,
-            cairo_flag=cairo,
-            ylim=ylim,
-            regions=regions,
-            add_plot_title=add_plot_title,
-            results=results,
+            ylim_str=ylim,
+            regions_file=regions,
+            plot_title=str(prefix.name) if add_plot_title else "",
+            results_r=results["results_r"],
+            results_w=results["results_w"],
+            results_c=results["results_c"],
         )
 
     logging.info("Finished prediction")
@@ -548,42 +541,6 @@ def _import_bed(
     return bed
 
 
-def exec_cbs(
-    prefix: Path,
-    alpha: float,
-    seed: int,
-    wd: Path,
-    ref_sex: Sex,
-    binsize: int,
-    results: Dict[str, Any],
-) -> List[List[Any]]:
-    """
-    Executed CBS on results_r using results_w as weights.
-    Calculates segmental zz-scores.
-    """
-    json_cbs_dir = Path(prefix, "_CBS_tmp")
-
-    json_dict = {
-        "R_script": str(Path(wd, "include/CBS.R")),
-        "ref_sex": ref_sex,
-        "alpha": alpha,
-        "binsize": binsize,
-        "seed": seed,
-        "results_r": results["results_r"],
-        "results_w": results["results_w"],
-        "infile": str(Path(json_cbs_dir, "_01.json")),
-        "outfile": str(Path(json_cbs_dir, "_02.json")),
-    }
-
-    results_c = _get_processed_cbs(exec_cbs(json_dict))
-    segment_z = get_z_score(results_c, results)
-    results_c = [
-        results_c[i][:3] + [segment_z[i]] + [results_c[i][3]]
-        for i in range(len(results_c))
-    ]
-    return results_c
-
-
 def _get_processed_cbs(
     cbs_data: List[Dict[str, Union[str, float]]],
 ) -> List[List[Any]]:
@@ -660,51 +617,13 @@ def get_post_processed_result(
     return final_results
 
 
-def exec_write_plots(
-    prefix: Path,
-    wd: str,
-    ref_sex: Sex,
-    beta: float,
-    zscore: float,
-    binsize: int,
-    n_reads: int,
-    cairo_flag: bool,
-    ylim: str,
-    regions: str,
-    add_plot_title: bool,
-    results: Dict[str, Any],
-) -> None:
-    """
-    Writes plots.
-    """
-
-    plot_title = str(prefix.name) if add_plot_title else ""
-    out_dir = f"{prefix}.plots"
-
-    create_plots(
-        out_dir=out_dir,
-        ref_sex=ref_sex,
-        beta=beta,
-        zscore=zscore,
-        binsize=binsize,
-        n_reads=n_reads,
-        cairo_flag=cairo_flag,
-        ylim_str=ylim,
-        regions_file=regions,
-        plot_title=plot_title,
-        results_r=results["results_r"],
-        results_w=results["results_w"],
-        results_c=results["results_c"],
-    )
-
-
 """
 Calculates zz-scores, marks aberrations and
 writes tables.
 """
 
 
-def generate_output_tables(
+def write_tables(
     prefix: Path,
     binsize: int,
     regions: str,
@@ -716,18 +635,16 @@ def generate_output_tables(
     n_reads: int,
     results: Dict[str, Any],
 ) -> None:
-    _generate_bins_bed(prefix, binsize, results)
-    _generate_segments_and_aberrations_bed(
+    write_bins_bed(prefix, binsize, results)
+    write_segments_and_aberrations_bed(
         prefix, binsize, ref_sex, beta, zscore, results
     )
-    _generate_chr_statistics_file(
-        prefix, bins_per_chr, binsize, sex, n_reads, results
-    )
+    write_statistics_file(prefix, bins_per_chr, binsize, sex, n_reads, results)
     if regions is not None:
-        _generate_regions_bed(prefix, binsize, regions, bins_per_chr, results)
+        write_regions_bed(prefix, binsize, regions, bins_per_chr, results)
 
 
-def _generate_bins_bed(
+def write_bins_bed(
     prefix: Path, binsize: int, results: Dict[str, Any]
 ) -> None:
     bins_file = open(Path(prefix, "_bins.bed"), "w")
@@ -766,7 +683,7 @@ def _generate_bins_bed(
     bins_file.close()
 
 
-def _generate_regions_bed(
+def write_regions_bed(
     prefix: Path,
     binsize: int,
     regions_path: str,
@@ -839,7 +756,7 @@ def _generate_regions_bed(
     regions_file.close()
 
 
-def _generate_segments_and_aberrations_bed(
+def write_segments_and_aberrations_bed(
     prefix: Path,
     binsize: int,
     ref_sex: Sex,
@@ -870,12 +787,15 @@ def _generate_segments_and_aberrations_bed(
         ploidy = 2
         if (chr_name == "X" or chr_name == "Y") and ref_sex == Sex.MALE:
             ploidy = 1
-        if beta is not None:
-            if float(segment[4]) > __get_aberration_cutoff(beta, ploidy)[1]:
+
+        if beta:
+            loss_cutoff = float(np.log2((ploidy - (beta / 2)) / ploidy))
+            gain_cutoff = float(np.log2((ploidy + (beta / 2)) / ploidy))
+            if float(segment[4]) > gain_cutoff:
                 aberrations_file.write(
                     "{}\tgain\n".format("\t".join([str(x) for x in row]))
                 )
-            elif float(segment[4]) < __get_aberration_cutoff(beta, ploidy)[0]:
+            elif float(segment[4]) < loss_cutoff:
                 aberrations_file.write(
                     "{}\tloss\n".format("\t".join([str(x) for x in row]))
                 )
@@ -895,13 +815,15 @@ def _generate_segments_and_aberrations_bed(
     aberrations_file.close()
 
 
-def __get_aberration_cutoff(beta: float, ploidy: int) -> Tuple[float, float]:
-    loss_cutoff = float(np.log2((ploidy - (beta / 2)) / ploidy))
-    gain_cutoff = float(np.log2((ploidy + (beta / 2)) / ploidy))
-    return loss_cutoff, gain_cutoff
+@dataclass
+class ChrStats:
+    chr: str
+    ratio_mean: float
+    ratio_median: float
+    zscore: float
 
 
-def _generate_chr_statistics_file(
+def write_statistics_file(
     prefix: Path,
     bins_per_chr: List[int],
     binsize: int,
@@ -909,33 +831,7 @@ def _generate_chr_statistics_file(
     n_reads: int,
     results: Dict[str, Any],
 ) -> None:
-    stats_file = open(Path(prefix, "_statistics.txt"), "w")
-    stats_file.write("chr\tratio.mean\tratio.median\tzscore\n")
-    chr_ratio_means = [
-        np.ma.average(
-            results["results_r"][chr], weights=results["results_w"][chr]
-        )
-        for chr in range(len(results["results_r"]))
-    ]
-    chr_ratio_medians = [
-        np.median([x for x in results["results_r"][chr] if x != 0])
-        for chr in range(len(results["results_r"]))
-    ]
-
-    results_c_chr = [
-        [x, 0, bins_per_chr[x] - 1, chr_ratio_means[x]]
-        for x in range(len(results["results_r"]))
-    ]
-
-    msv = round(
-        get_median_segment_variance(
-            results["results_c"], results["results_r"]
-        ),
-        5,
-    )
-    cpa = round(get_cpa(results["results_c"], binsize), 5)
-    chr_z_scores = get_z_score(results_c_chr, results)
-
+    chr_stats: List[ChrStats] = []
     for chr in range(len(results["results_r"])):
         chr_name = str(chr + 1)
         if chr_name == "23":
@@ -943,42 +839,35 @@ def _generate_chr_statistics_file(
         if chr_name == "24":
             chr_name = "Y"
 
-        row = [
-            chr_name,
-            chr_ratio_means[chr],
-            chr_ratio_medians[chr],
-            chr_z_scores[chr],
-        ]
-
-        stats_file.write("\t".join([str(x) for x in row]) + "\n")
-
-    stats_file.write(
-        "Sex based on --yfrac (or manually overridden by --sex): {}\n".format(
-            str(sex)
+        ratio_mean = np.ma.average(
+            results["results_r"][chr], weights=results["results_w"][chr]
         )
-    )
-
-    stats_file.write("Number of reads: {}\n".format(str(n_reads)))
-
-    stats_file.write(
-        "Standard deviation of the ratios per chromosome: {}\n".format(
-            str(round(float(np.nanstd(chr_ratio_means)), 5))
+        ratio_median = np.median(
+            [x for x in results["results_r"][chr] if x != 0]
         )
-    )
+        result_c = [chr, 0, bins_per_chr[chr] - 1, ratio_mean]
+        zscore = get_z_score([result_c], results)[0]
 
-    stats_file.write(
-        "Median segment variance per bin (doi: 10.1093/nar/gky1263): {}\n".format(
-            str(msv)
-        )
-    )
+        chr_stats.append(ChrStats(chr_name, ratio_mean, ratio_median, zscore))
 
-    stats_file.write(
-        "Copy number profile abnormality (CPA) score (doi: 10.1186/s13073-020-00735-4): {}\n".format(
-            str(cpa)
-        )
-    )
-
-    stats_file.close()
+    stats_json = open(Path(prefix, "_statistics.json"), "w")
+    stats_dict = {
+        "sex": sex,
+        "n_reads": n_reads,
+        "chr_stats": chr_stats,
+        "ratio_stdev": round(
+            float(np.nanstd([c.ratio_mean for c in chr_stats])), 4
+        ),
+        "msv": round(
+            get_median_segment_variance(
+                results["results_c"], results["results_r"]
+            ),
+            4,
+        ),
+        "cpa": round(get_cpa(results["results_c"], binsize), 4),
+    }
+    json.dump(stats_dict, stats_json, indent=4)
+    stats_json.close()
 
 
 def get_cpa(results_c: List[List[Any]], binsize: int) -> float:
@@ -1051,26 +940,55 @@ def get_z_score(
     return zs
 
 
-def run_cbs(json_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """
-    Communicates with R. Outputs new json dictionary,
-    resulting from R, if 'outfile' is a key in the
-    input json. 'infile' and 'R_script' are mandatory keys
-    and correspond to the input file required to execute the
-    R_script, respectively.
-    """
-    json.dump(json_dict, open(json_dict["infile"], "w"))
+def run_cbs(
+    prefix: Path,
+    alpha: float,
+    seed: int,
+    ref_sex: Sex,
+    binsize: int,
+    results: Dict[str, Any],
+) -> Dict[str, Any]:
+    cbs_tmp_dir = Path(prefix, "_CBS_tmp")
+    cbs_input = Path(cbs_tmp_dir, "_01.json")
+    cbs_output = Path(cbs_tmp_dir, "_02.json")
 
-    r_cmd = ["Rscript", json_dict["R_script"], "--infile", json_dict["infile"]]
-    logging.debug("CBS cmd: {}".format(r_cmd))
+    json.dump(
+        {
+            "ratios": results["results_r"],
+            "weights": results["results_w"],
+        },
+        open(cbs_input, "w"),
+    )
+    wd = Path(__file__).parent
+    r_cmd = [
+        "Rscript",
+        Path(wd, "include/CBS.R"),
+        "--infile",
+        cbs_input,
+        "--outfile",
+        cbs_output,
+        "--sex",
+        ref_sex,
+        "--alpha",
+        alpha,
+        "--binsize",
+        binsize,
+        "--seed",
+        seed,
+    ]
+    logging.debug(f"CBS cmd: {r_cmd}")
 
     try:
         subprocess.check_call(r_cmd)
+        os.remove(cbs_input)
     except subprocess.CalledProcessError as e:
-        logging.critical("Rscript failed: {}".format(e))
-        sys.exit()
-    os.remove(json_dict["infile"])
-    if "outfile" in json_dict.keys():
-        json_out = json.load(open(json_dict["outfile"]))
-        os.remove(json_dict["outfile"])
-        return json_out
+        logging.critical(f"Rscript failed: {e}")
+        sys.exit(1)
+
+    results_c = _get_processed_cbs(json.load(cbs_output))
+    segment_z = get_z_score(results_c, results)
+    results_c = [
+        results_c[i][:3] + [segment_z[i]] + [results_c[i][3]]
+        for i in range(len(results_c))
+    ]
+    return results_c

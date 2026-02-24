@@ -1,9 +1,14 @@
 # -----
-# arg
+# args
 # -----
 
 args <- commandArgs(TRUE)
-in.file <- paste0(args[which(args == "--infile")+1])
+input_file <- paste0(args[which(args == "--infile")+1])
+output_file <- paste0(args[which(args == "--outfile")+1])
+seed <- as.numeric(paste0(args[which(args == "--seed")+1]))
+sex <- paste0(args[which(args == "--sex")+1])
+alpha <- as.numeric(paste0(args[which(args == "--alpha")+1]))
+binsize <- as.numeric(paste0(args[which(args == "--binsize")+1]))
 
 # -----
 # lib
@@ -16,16 +21,10 @@ suppressMessages(library("jsonlite"))
 # main
 # -----
 
-# load input
-
-input <- read_json(in.file)
-ratio <- as.numeric(unlist(input$results_r))
-weights <- as.numeric(unlist(input$results_w))
-seed <- as.numeric(input$seed)
-sex <- input$ref_sex
-alpha <- as.numeric(input$alpha)
-binsize <- as.numeric(input$binsize)
-out.file <- as.character(input$outfile)
+# load input json
+input <- read_json(input_file)
+ratios <- as.numeric(unlist(input$ratios))
+weights <- as.numeric(unlist(input$weights))
 
 if (sex == "M"){
     chrs = 1:24
@@ -35,13 +34,13 @@ if (sex == "M"){
 
 # prepare for CBS
 
-bins.per.chr <- sapply(chrs, FUN = function(x) length(unlist(input$results_r[x])))
+bins.per.chr <- sapply(chrs, FUN = function(x) length(unlist(input$ratios[x])))
 chr.end.pos <- c(0,cumsum(bins.per.chr))
 
-ratio[ratio == 0] = NA # blacklist
+ratios[ratios == 0] = NA # blacklist
 weights[weights == 0] = 1^-99 # omit DNAcopy weirdness -- weight cannot be NA or 0
 
-for.cbs <- as.data.frame(ratio)
+for.cbs <- as.data.frame(ratios)
 chr.rep <- c()
 chr.rep.2 <- c()
 for (chr in chrs){
@@ -70,7 +69,7 @@ if (!(is.na(seed) || seed == '')) {
 CNA.object <- CNA(for.cbs$y, for.cbs$chromosome, for.cbs$x, data.type = "logratio", sampleid = "X")
 f = file()
 sink(file=f) ## silence output
-CNA.object <- invisible(segment(CNA.object, alpha = as.numeric(alpha), verbose=1, weights=weights[cbs.mask])$output)
+CNA.object <- invisible(segment(CNA.object, alpha = as.numeric(alpha), verbose=1, weights=weights[cbs.mask])$output_file)
 sink() ## undo silencing
 close(f)
 
@@ -129,4 +128,4 @@ for (row.i in 1:nrow(CNA.object)){
 CNA.object$s <- CNA.object$s - 1 # Make python compliant
 
 # Write output
-write_json(CNA.object, out.file)
+write_json(CNA.object, output_file)

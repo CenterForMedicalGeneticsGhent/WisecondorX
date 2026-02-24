@@ -108,7 +108,6 @@ WisecondorX predict test_input.npz reference_input.npz output_id [--optional arg
 | `--plot`                       | Outputs custom .png plots (trisomy 21 NIPT example at `./example.plot`), directly interpretable                                                                                                                          |
 | `--regions x`                   |  Mark custom regions on the plot; requires a headerless .bed file. (CNS tumor genes example at `./regions.example`)                                                                        |
 | `--ylim [a,b]`                 | Force WisecondorX to use y-axis interval [a,b] during plotting, e.g. [-2,2]                                                                                                                                                       |
-| `--cairo`                      | Some operating systems require the cairo bitmap type to write plots                                                                                                                                                               |
 | `--seed`| Random seed for segmentation algorithm (default:None)                                                                                                                                                                                  |
 
 ### Additional functionality

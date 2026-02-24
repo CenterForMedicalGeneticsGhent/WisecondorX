@@ -1,9 +1,7 @@
 import bisect
 import logging
 import random
-import os
 import sys
-import time
 from pathlib import Path
 from typing import Optional, Annotated
 
@@ -13,6 +11,7 @@ from scipy.signal import argrelextrema
 from sklearn.decomposition import PCA
 from sklearn.mixture import GaussianMixture
 import typer
+import matplotlib.pyplot as plt
 
 from wisecondorx.utils import scale_sample, sex_correct, Sex
 
@@ -189,17 +188,17 @@ def wcx_newref(
 
 
 def tool_newref_prep(
-    prepdatafile: str,
-    prepfile: str,
+    prepdatafile: Path,
+    prepfile: Path,
     binsize: int,
     samples: np.ndarray,
-    sex: str,
+    sex: Sex,
     mask: np.ndarray,
     bins_per_chr: list[int],
 ) -> None:
-    if sex == "A":
+    if sex == Sex.AUTOSOMAL:
         last_chr = 22
-    elif sex == "F":
+    elif sex == Sex.FEMALE:
         last_chr = 23
     else:
         last_chr = 24
@@ -235,10 +234,10 @@ def tool_newref_prep(
 
 
 def tool_newref_main(
-    prepdatafile: str,
-    prepfile: str,
-    partfile: str,
-    tmpoutfile: str,
+    prepdatafile: Path,
+    prepfile: Path,
+    partfile: Path,
+    tmpoutfile: Path,
     refsize: int,
     cpus: int,
     part: Optional[list[int]] = None,
@@ -269,15 +268,15 @@ def tool_newref_main(
 
     tool_newref_post(prepfile, partfile, tmpoutfile, cpus)
 
-    os.remove(prepfile)
-    os.remove(prepdatafile)
+    prepfile.unlink()
+    prepdatafile.unlink()
     for p in range(1, cpus + 1):
-        os.remove("{}_{}.npz".format(partfile, str(p)))
+        (partfile.parent / f"{partfile.stem}_{p}{partfile.suffix}").unlink()
 
 
 def _tool_newref_part(
-    prepfile: str,
-    partfile: str,
+    prepfile: Path,
+    partfile: Path,
     refsize: int,
     part: list[int],
     pca_corrected_data: np.ndarray,
@@ -288,14 +287,12 @@ def _tool_newref_part(
     """
     if part[0] > part[1]:
         logging.critical(
-            "Part should be smaller or equal to total parts:{} > {} is wrong".format(
-                part[0], part[1]
-            )
+            f"Part should be smaller or equal to total parts: {part[0]} > {part[1]} is wrong"
         )
         sys.exit()
     if part[0] < 0:
         logging.critical(
-            "Part should be at least zero: {} < 0 is wrong".format(part[0])
+            f"Part should be at least zero: {part[0]} < 0 is wrong"
         )
         sys.exit()
 
@@ -313,7 +310,7 @@ def _tool_newref_part(
     )
 
     np.savez_compressed(
-        "{}_{}.npz".format(partfile, str(part[0])),
+        partfile.parent / f"{partfile.stem}_{part[0]}{partfile.suffix}",
         indexes=indexes,
         distances=distances,
         null_ratios=null_ratios,
@@ -321,7 +318,7 @@ def _tool_newref_part(
 
 
 def tool_newref_post(
-    prepfile: str, partfile: str, tmpoutfile: str, cpus: int
+    prepfile: Path, partfile: Path, tmpoutfile: Path, cpus: int
 ) -> None:
     """
     Merges separate subfiles (one for each thread) to a
@@ -333,7 +330,7 @@ def tool_newref_post(
     big_distances = []
     big_null_ratios = []
     for p in range(1, cpus + 1):
-        infile = "{}_{}.npz".format(partfile, str(p))
+        infile = partfile.parent / f"{partfile.stem}_{p}{partfile.suffix}"
         npzdata_part = np.load(infile, encoding="latin1")
         big_indexes.extend(npzdata_part["indexes"])
         big_distances.extend(npzdata_part["distances"])
@@ -359,28 +356,8 @@ def tool_newref_post(
     )
 
 
-def force_remove(file_id: Path) -> None:
-    """
-    Tries to remove text file, when it is busy, until becomes successful.
-    This function, prevents OSError: [Errno 26] Text file busy...
-    """
-    attemp = 1
-    while True:
-        try:
-            os.remove(file_id)
-            break
-        except Exception:
-            print(
-                "Attemp #{}: Cannot remove {}, because it is busy, trying again...".format(
-                    attemp, file_id
-                )
-            )
-            attemp = attemp + 1
-            time.sleep(5)
-
-
 def tool_newref_merge(
-    outfile: str, nipt: bool, outfiles: list[str], trained_cutoff: float
+    outfile: Path, nipt: bool, outfiles: list[Path], trained_cutoff: float
 ) -> None:
     """
     Merges separate subfiles (A, F, M) to one final
@@ -399,7 +376,7 @@ def tool_newref_merge(
                 final_ref["{}.M".format(str(component))] = npz_file[component]
             else:
                 final_ref[str(component)] = npz_file[component]
-        force_remove(file_id)
+        file_id.unlink()
     final_ref["is_nipt"] = nipt
     final_ref["trained_cutoff"] = trained_cutoff
     np.savez_compressed(outfile, **final_ref)
@@ -408,7 +385,7 @@ def tool_newref_merge(
 def train_sex_model(
     samples: np.ndarray,
     yfrac: float = None,
-    plotyfrac: Path = None,
+    yfrac_plot: Path = None,
 ) -> tuple[list[str], float]:
     """
     A Gaussian mixture model is fitted against
@@ -437,35 +414,32 @@ def train_sex_model(
     gmm_x = np.linspace(0, 0.02, 5000)
     gmm_y = np.exp(gmm.score_samples(gmm_x.reshape(-1, 1)))
 
-    if plotyfrac is not None:
-        import matplotlib.pyplot as plt
-
+    if yfrac_plot:
         fig, ax = plt.subplots(figsize=(16, 6))
         ax.hist(y_fractions, bins=100, density=True)
         ax.plot(gmm_x, gmm_y, "r-", label="Gaussian mixture fit")
         ax.set_xlim([0, 0.02])
         ax.legend(loc="best")
-        plt.savefig(plotyfrac)
-        logging.info("Image written to {}, now quitting ...".format(plotyfrac))
-        exit()
+        plt.savefig(yfrac_plot)
+        logging.info(
+            "Image written to {}, now quitting ...".format(yfrac_plot)
+        )
+        exit(0)
 
-    if yfrac is not None:
-        cut_off = yfrac
-    else:
+    yfrac_cutoff = yfrac
+    if yfrac is None:
         sort_idd = np.argsort(gmm_x)
         sorted_gmm_y = gmm_y[sort_idd]
 
         local_min_i = argrelextrema(sorted_gmm_y, np.less)
 
-        cut_off = gmm_x[local_min_i][0]
-        logging.info(
-            "Determined --yfrac cutoff: {}".format(str(round(cut_off, 4)))
-        )
+        yfrac_cutoff = gmm_x[local_min_i][0]
+        logging.info(f"Determined --yfrac cutoff: {yfrac_cutoff:.4f}")
 
-    sexes[y_fractions > cut_off] = "M"
-    sexes[y_fractions < cut_off] = "F"
+    sexes[y_fractions > yfrac_cutoff] = "M"
+    sexes[y_fractions < yfrac_cutoff] = "F"
 
-    return sexes.tolist(), cut_off
+    return sexes.tolist(), yfrac_cutoff
 
 
 def get_mask(samples: np.ndarray) -> tuple[np.ndarray, list[int]]:
