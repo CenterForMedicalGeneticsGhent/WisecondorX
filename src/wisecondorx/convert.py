@@ -15,7 +15,7 @@ def wcx_convert(
     infile: Path = typer.Argument(
         ..., help="aligned reads input for conversion (.bam or .cram)"
     ),
-    outfile: Path = typer.Argument(..., help="Output .npz file"),
+    prefix: Path = typer.Argument(..., help="Output .npz file"),
     reference: Optional[str] = typer.Option(
         None,
         "-r",
@@ -150,7 +150,7 @@ def wcx_convert(
     }
 
     np.savez_compressed(
-        outfile,
+        Path(prefix, ".npz"),
         binsize=binsize,
         sample=reads_per_chromosome_bin,
         quality=qual_info,

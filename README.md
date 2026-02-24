@@ -59,56 +59,57 @@ There are three main stages (converting, reference creating and predicting) when
       observe additional improvement concerning normalization.
 - Predict copy number alterations (using the reference file and test .npz cases of interest)
 
-### Stage (1) Convert aligned reads (bam/cram) to .npz
+### Convert aligned reads (bam/cram) to .npz
 
 ```bash
 
-WisecondorX convert input.bam/cram output.npz [--optional arguments]
+WisecondorX convert input.bam/cram output_prefix [--optional arguments]
 ```
 
-| <br>Optional argument <br><br> | Function                                                                                                                                                                                                 |
-| :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--reference x`                | Fasta reference to be used with cram inputs                                                                                                                                                              |
-| `--binsize x`                  | Size per bin in bp; the reference bin size should be a multiple of this value. Note that this parameter does not impact the resolution, yet it can be used to optimize processing speed (default: x=5000) |
-| `--rmdup`                    | Set this flag to `false` to avoid removing duplicate reads                                                                                                                                                                 |
+| <br>Optional argument <br><br> | Function                                                                                                                                                                                                 | Default |
+| :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------ |
+| `--reference`                  | Fasta reference to be used with `.cram` inputs                                                                                                                                                           | `None`  |
+| `--binsize`                    | Size per bin in bp; the reference bin size should be a multiple of this value. Note that this parameter does not impact the resolution, yet it can be used to optimize processing speed                  | `5000`  |
+| `--rmdup`                   | Flag to avoid removing duplicate reads (`rmdup` is applied by default)                                                                                                                                   |`True`|
 
-### Stage (2) Create reference
+### Create reference
 
 ```bash
 
 WisecondorX newref reference_input_dir/*.npz reference_prefix [--optional arguments]
 ```
 
-| <br>Optional argument <br><br> | Function                                                                                                                                    |
-| :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--nipt`                       | **Always include this flag for the generation of a NIPT reference**                                                                         |
-| `--binsize x`                  | Size per bin in bp, defines the resolution of the output (default: x=1e5)                                                                   |
-| `--refsize x`                  | Amount of reference locations per target; should generally not be tweaked (default: x=300)                                                  |
-| `--yfrac x`                    | Y read fraction cutoff, in order to manually define sex. Setting this to 1 will treat all samples as female                              |
-| `--plotyfrac x`                | plots Y read fraction histogram and Gaussian mixture fit to file x, can help when setting `--yfrac` manually; software quits after plotting |
-| `--cpus x`                     | Number of threads requested (default: x=1)                                                                                                  |
+| <br>Optional argument <br><br> | Function                                                                                                                                    | Default |
+| :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------ | :------ |
+| `--nipt`                       | **Always include this flag for the generation of a NIPT reference**                                                                         | `False` |
+| `--binsize`                    | Size of target bins in base pairs, defines the resolution of the output                                                                     | `5000`  |
+| `--refsize`                    | Amount of reference locations per target; should generally not be tweaked                                                                   | `300`   |
+| `--yfrac`                      | Y read fraction cutoff, to manually define sex. Setting this to 1 will treat all samples as female                                          | `None`  |
+| `--yfracplot`                  | Path to yfrac `.png` plot for optimization; can help when setting `--yfrac` manually; software quits after plotting                         | `None`  |
+| `--cpus`                       | Number of threads requested                                                                                                                 | `1`     |
 
-### Stage (3) Predict copy number alterations
+### Predict copy number alterations
 
 ```bash
 
 WisecondorX predict test_input.npz reference_input.npz output_id [--optional arguments]
 ```
 
-| <br>Optional argument <br><br> | Function                                                                                                                                                                                                                          |
-| :----------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--minrefbins x`               | Minimum amount of sensible reference bins per target bin; should generally not be tweaked (default: x=150)                                                                                                                        |
-| `--maskrepeats x`              | Bins with distances > mean + sd \* 3 in the reference will be masked. This parameter represents the number of masking cycles and defines the stringency of the blacklist (default: x=5)                                           |
-| `--zscore x`                   | Z-score cutoff to call segments as aberrations (default: x=5)                                                                                                                                                                     |
-| `--alpha x`                    | P-value cutoff for calling circular binary segmentation breakpoints (default: x=1e-4)                                                                                                                                             |
-| `--beta x`                     | When beta is given, `--zscore` is ignored. Beta sets a ratio cutoff for aberration calling. It's a number between 0 (liberal) and 1 (conservative) and, when used, is optimally close to the purity (e.g. fetal/tumor fraction)   |
-| `--blacklist x`                | Blacklist for masking additional regions; requires headerless .bed file. This is particularly useful when the reference set is too small to recognize some obvious loci (such as centromeres; examples at `./example.blacklist/`) |
-| `--sex x`                   | Force WisecondorX to analyze this case as male (M) or female (F). Useful when e.g. dealing with a loss of chromosome Y, which causes erroneous sex predictions (choices: x=F or x=M)                                           |
-| `--bed`                        | Outputs tab-delimited .bed files (trisomy 21 NIPT example at `./example.bed`), containing all necessary information                                                                                                      |
-| `--plot`                       | Outputs custom .png plots (trisomy 21 NIPT example at `./example.plot`), directly interpretable                                                                                                                          |
-| `--regions x`                   |  Mark custom regions on the plot; requires a headerless .bed file. (CNS tumor genes example at `./regions.example`)                                                                        |
-| `--ylim [a,b]`                 | Force WisecondorX to use y-axis interval [a,b] during plotting, e.g. [-2,2]                                                                                                                                                       |
-| `--seed`| Random seed for segmentation algorithm (default:None)                                                                                                                                                                                  |
+| <br>Optional argument <br><br> | Function                                                                                                                                                                                                                          | Default |
+| :----------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------ |
+| `--minrefbins`                 | Minimum amount of sensible reference bins per target bin; should generally not be tweaked                                                                                                                                         | `150`   |
+| `--maskrepeats`                | Bins with distances > mean + sd \* 3 in the reference will be masked. This parameter represents the number of masking cycles and defines the stringency of the blacklist                                                          | `5`     |
+| `--zscore`                     | Z-score cutoff to call segments as aberrations                                                                                                                                                                                    | `5.0`   |
+| `--alpha`                      | P-value cutoff for calling circular binary segmentation breakpoints                                                                                                                                                               | `1e-4`  |
+| `--beta`                       | When beta is given, `--zscore` is ignored. Beta sets a ratio cutoff for aberration calling. It's a number between 0 (liberal) and 1 (conservative) and, when used, is optimally close to the purity (e.g. fetal/tumor fraction)   | `None`  |
+| `--blacklist`                  | Blacklist for masking additional regions; requires headerless .bed file. This is particularly useful when the reference set is too small to recognize some obvious loci (such as centromeres; examples at `./example.blacklist/`) | `None`  |
+| `--sex`                        | Force WisecondorX to analyze this case as male (M) or female (F). Useful when e.g. dealing with a loss of chromosome Y, which causes erroneous sex predictions (choices: `F` or `M`)                                              | `None`  |
+| `--bed`                     | Flag to avoid outputting tab-delimited .bed files containing all necessary information (enabled by default)                                                                                                                                                                    |`True`|
+| `--plot`                       | Outputs custom `.png` plots (trisomy 21 NIPT example at `./example.plot`), directly interpretable                                                                                                                                 | `False` |
+| `--add-plot-title`             | Add the output name as the plot title                                                                                                                                                         | `False` |
+| `--regions`                    | Mark custom regions on the plot; requires a headerless `.bed` file. (CNS tumor genes example at `./regions.example`)                                                                                                              | `None`  |
+| `--ylim`                       | Force WisecondorX to use y-axis interval [a,b] during plotting, e.g. `[-2,2]`                                                                                                                                                     | `None |
+| `--seed`                       | Random seed for segmentation algorithm                                                                                                                                                                                            | `42`  |
 
 ### Additional functionality
 
