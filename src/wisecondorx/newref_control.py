@@ -35,6 +35,28 @@ def tool_newref_prep(args, samples, gender, mask, bins_per_chr):
     masked_data = normalize_and_mask(samples, range(1, last_chr + 1), mask)
     pca_corrected_data, pca = train_pca(masked_data)
 
+    # PCA Distance filtering: remove bins that sit far from the median profile (unmatchable)
+    # This reduces noise on autosomes and handles extreme chrY outliers
+    med_prof = np.median(pca_corrected_data, axis=0)
+    dist_to_med = np.sum((pca_corrected_data - med_prof)**2, axis=1)
+    mad = np.median(np.abs(dist_to_med - np.median(dist_to_med)))
+    # 10*MAD is a conservative but robust cutoff for heavy tails
+    # We also enforce a floor of 5.0 to avoid over-trimming very clean data
+    cutoff = max(np.median(dist_to_med) + 10 * mad, 5.0)
+    bad_bins_mask = dist_to_med > cutoff
+
+    if np.any(bad_bins_mask):
+        n_removed = np.sum(bad_bins_mask)
+        logging.info(f"Removing {n_removed} anomalous bins based on PCA distance (cutoff={cutoff:.4f})")
+        # Update the global mask (mask is a view into total_mask passed from main.py)
+        masked_indices = np.where(mask)[0]
+        global_bad_indices = masked_indices[bad_bins_mask]
+        mask[global_bad_indices] = False
+
+        # Re-train PCA on the cleaned set of bins
+        masked_data = normalize_and_mask(samples, range(1, last_chr + 1), mask)
+        pca_corrected_data, pca = train_pca(masked_data)
+
     masked_bins_per_chr = [
         sum(mask[sum(bins_per_chr[:i]) : sum(bins_per_chr[:i]) + x])
         for i, x in enumerate(bins_per_chr)
