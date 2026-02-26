@@ -3,7 +3,6 @@
 import logging
 
 import sys
-from typing import Optional
 
 import numpy as np
 import pysam
@@ -15,8 +14,8 @@ def wcx_convert(
     infile: Path = typer.Argument(
         ..., help="aligned reads input for conversion (.bam or .cram)"
     ),
-    prefix: Path = typer.Argument(..., help="Output .npz file"),
-    reference: Optional[str] = typer.Option(
+    prefix: Path = typer.Argument(..., help="Output prefix"),
+    reference: Path = typer.Option(
         None,
         "-r",
         "--reference",
@@ -35,19 +34,8 @@ def wcx_convert(
         logging.error(f"Input file {infile} does not exist or is not a file.")
         sys.exit(1)
     if infile.suffix == ".bam":
-        if (
-            not Path(infile, ".bai").exists()
-            and not Path(infile, ".csi").exists()
-        ):
-            logging.error(
-                "Bam inputs need to have a 'bai' or 'csi' index present. Run 'samtools index {f}' to generate the index."
-            )
         reads_file = pysam.AlignmentFile(infile, "rb")
     elif infile.suffix == ".cram":
-        if not Path(infile, ".crai").exists():
-            logging.error(
-                "Cram inputs need to have a 'crai' index present. Run 'samtools index {f}' to generate the index."
-            )
         if not reference:
             logging.error(
                 "Cram inputs need a reference fasta provided through the '--reference' flag."
@@ -72,7 +60,7 @@ def wcx_convert(
     larp = -1
     larp2 = -1
 
-    logging.info("Converting aligned reads ... This might take a while ...")
+    logging.info("Converting aligned reads")
 
     for index, chr in enumerate(reads_file.references):
         chr_name = chr
@@ -150,9 +138,9 @@ def wcx_convert(
     }
 
     np.savez_compressed(
-        Path(prefix, ".npz"),
+        Path(f"{prefix}.npz"),
         binsize=binsize,
-        sample=reads_per_chromosome_bin,
+        reads_per_bin=reads_per_chromosome_bin,
         quality=qual_info,
     )
 

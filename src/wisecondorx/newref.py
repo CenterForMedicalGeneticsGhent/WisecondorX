@@ -13,7 +13,7 @@ from sklearn.mixture import GaussianMixture
 import typer
 import matplotlib.pyplot as plt
 
-from wisecondorx.utils import scale_sample, sex_correct, Sex
+from wisecondorx.utils import sex_correct, Sex, scale_bins_per_chromosome
 
 
 def wcx_newref(
@@ -71,7 +71,9 @@ def wcx_newref(
         npzdata = np.load(infile, encoding="latin1", allow_pickle=True)
         sample = npzdata["sample"].item()
         source_binsize = int(npzdata["binsize"])
-        samples.append(scale_sample(sample, source_binsize, target_binsize))
+        samples.append(
+            scale_bins_per_chromosome(sample, source_binsize, target_binsize)
+        )
 
     samples_array = np.array(samples)
     sexes, trained_cutoff = train_sex_model(

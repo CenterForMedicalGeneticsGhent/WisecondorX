@@ -1,7 +1,6 @@
 import logging
 import sys
 from enum import Enum
-from typing import Dict
 
 import numpy as np
 
@@ -12,15 +11,16 @@ class Sex(Enum):
     AUTOSOMAL = "A"
 
 
-def scale_sample(
-    sample: Dict[str, np.ndarray], source_binsize: float, target_binsize: float
-) -> Dict[str, np.ndarray]:
+def scale_bins_per_chromosome(
+    bins_per_chr: dict[str, np.ndarray],
+    source_binsize: float,
+    target_binsize: float,
+) -> dict[str, np.ndarray]:
     """
-    Scales the bin size of a sample.npz to the one
-    requested for the reference
+    Scales the bin size of a sample bins per chromosome to the one requested for the reference
     """
     if source_binsize == target_binsize:
-        return sample
+        return bins_per_chr
 
     if (
         target_binsize == 0
@@ -33,23 +33,23 @@ def scale_sample(
         )
         sys.exit(1)
 
-    scaled_sample: Dict[str, np.ndarray] = dict()
+    scaled_bins_per_chr: dict[str, np.ndarray] = dict()
     scale = target_binsize / source_binsize
-    for chr_name in sample:
-        chr_data = sample[chr_name]
+    for chr_name in bins_per_chr:
+        chr_data = bins_per_chr[chr_name]
         new_len = int(np.ceil(len(chr_data) / float(scale)))
         scaled_chr = np.zeros(new_len, dtype=np.int32)
         for i in range(new_len):
             scaled_chr[i] = np.sum(
                 chr_data[int(i * scale) : int(i * scale + scale)]
             )
-            scaled_sample[chr_name] = scaled_chr
-    return scaled_sample
+            scaled_bins_per_chr[chr_name] = scaled_chr
+    return scaled_bins_per_chr
 
 
 def sex_correct(
-    sample: Dict[str, np.ndarray], sex: Sex
-) -> Dict[str, np.ndarray]:
+    sample: dict[str, np.ndarray], sex: Sex
+) -> dict[str, np.ndarray]:
     """
     Levels gonosomal reads with the one at the autosomes.
     """

@@ -1,0 +1,290 @@
+[
+    {
+        "chromosome": 1,
+        "start": 15,
+        "end": 2432,
+        "ratio": -0.008
+    },
+    {
+        "chromosome": 1,
+        "start": 2502,
+        "end": 2504,
+        "ratio": -0.1689
+    },
+    {
+        "chromosome": 1,
+        "start": 2862,
+        "end": 4977,
+        "ratio": -0.0026
+    },
+    {
+        "chromosome": 2,
+        "start": 2,
+        "end": 1842,
+        "ratio": -0.0005
+    },
+    {
+        "chromosome": 2,
+        "start": 1883,
+        "end": 4843,
+        "ratio": 0.0065
+    },
+    {
+        "chromosome": 3,
+        "start": 2,
+        "end": 3962,
+        "ratio": 0.0025
+    },
+    {
+        "chromosome": 4,
+        "start": 3,
+        "end": 994,
+        "ratio": 0.0044
+    },
+    {
+        "chromosome": 4,
+        "start": 1036,
+        "end": 1822,
+        "ratio": 0.0124
+    },
+    {
+        "chromosome": 4,
+        "start": 1822,
+        "end": 1849,
+        "ratio": 0.582
+    },
+    {
+        "chromosome": 4,
+        "start": 1849,
+        "end": 3801,
+        "ratio": 0.0149
+    },
+    {
+        "chromosome": 5,
+        "start": 2,
+        "end": 928,
+        "ratio": -0.0023
+    },
+    {
+        "chromosome": 5,
+        "start": 991,
+        "end": 3627,
+        "ratio": 0.0064
+    },
+    {
+        "chromosome": 6,
+        "start": 3,
+        "end": 888,
+        "ratio": -0.0133
+    },
+    {
+        "chromosome": 6,
+        "start": 888,
+        "end": 2915,
+        "ratio": 0.0157
+    },
+    {
+        "chromosome": 6,
+        "start": 2915,
+        "end": 3412,
+        "ratio": -0.0085
+    },
+    {
+        "chromosome": 7,
+        "start": 1,
+        "end": 609,
+        "ratio": -0.0071
+    },
+    {
+        "chromosome": 7,
+        "start": 609,
+        "end": 612,
+        "ratio": -0.8885
+    },
+    {
+        "chromosome": 7,
+        "start": 612,
+        "end": 1162,
+        "ratio": 0.0006
+    },
+    {
+        "chromosome": 7,
+        "start": 1218,
+        "end": 3186,
+        "ratio": -0.0042
+    },
+    {
+        "chromosome": 8,
+        "start": 4,
+        "end": 877,
+        "ratio": -0.0003
+    },
+    {
+        "chromosome": 8,
+        "start": 918,
+        "end": 2901,
+        "ratio": 0.0053
+    },
+    {
+        "chromosome": 9,
+        "start": 1,
+        "end": 866,
+        "ratio": 0.0061
+    },
+    {
+        "chromosome": 9,
+        "start": 1209,
+        "end": 2763,
+        "ratio": -0.0081
+    },
+    {
+        "chromosome": 10,
+        "start": 2,
+        "end": 791,
+        "ratio": -0.0155
+    },
+    {
+        "chromosome": 10,
+        "start": 834,
+        "end": 2673,
+        "ratio": -0.006
+    },
+    {
+        "chromosome": 11,
+        "start": 4,
+        "end": 1015,
+        "ratio": -0.0008
+    },
+    {
+        "chromosome": 11,
+        "start": 1091,
+        "end": 2700,
+        "ratio": -0.0077
+    },
+    {
+        "chromosome": 12,
+        "start": 2,
+        "end": 693,
+        "ratio": 0.0002
+    },
+    {
+        "chromosome": 12,
+        "start": 747,
+        "end": 2663,
+        "ratio": -0.0017
+    },
+    {
+        "chromosome": 13,
+        "start": 371,
+        "end": 2285,
+        "ratio": 0.0048
+    },
+    {
+        "chromosome": 14,
+        "start": 364,
+        "end": 2137,
+        "ratio": -0.001
+    },
+    {
+        "chromosome": 15,
+        "start": 396,
+        "end": 400,
+        "ratio": -0.0888
+    },
+    {
+        "chromosome": 15,
+        "start": 451,
+        "end": 2035,
+        "ratio": -0.009
+    },
+    {
+        "chromosome": 16,
+        "start": 2,
+        "end": 725,
+        "ratio": -0.0328
+    },
+    {
+        "chromosome": 16,
+        "start": 926,
+        "end": 1801,
+        "ratio": -0.0193
+    },
+    {
+        "chromosome": 17,
+        "start": 4,
+        "end": 454,
+        "ratio": -0.0309
+    },
+    {
+        "chromosome": 17,
+        "start": 533,
+        "end": 1661,
+        "ratio": -0.0204
+    },
+    {
+        "chromosome": 18,
+        "start": 3,
+        "end": 308,
+        "ratio": -0.008
+    },
+    {
+        "chromosome": 18,
+        "start": 418,
+        "end": 1604,
+        "ratio": 0.0033
+    },
+    {
+        "chromosome": 19,
+        "start": 4,
+        "end": 486,
+        "ratio": -0.0321
+    },
+    {
+        "chromosome": 19,
+        "start": 548,
+        "end": 1170,
+        "ratio": -0.0248
+    },
+    {
+        "chromosome": 20,
+        "start": 1,
+        "end": 525,
+        "ratio": -0.0113
+    },
+    {
+        "chromosome": 20,
+        "start": 576,
+        "end": 1286,
+        "ratio": -0.0222
+    },
+    {
+        "chromosome": 21,
+        "start": 127,
+        "end": 214,
+        "ratio": -0.0415
+    },
+    {
+        "chromosome": 21,
+        "start": 259,
+        "end": 932,
+        "ratio": -0.0094
+    },
+    {
+        "chromosome": 22,
+        "start": 219,
+        "end": 253,
+        "ratio": -0.0804
+    },
+    {
+        "chromosome": 22,
+        "start": 305,
+        "end": 1014,
+        "ratio": -0.0195
+    },
+    {
+        "chromosome": 23,
+        "start": 5,
+        "end": 3121,
+        "ratio": 0.0063
+    }
+]

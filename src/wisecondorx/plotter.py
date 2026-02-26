@@ -14,7 +14,7 @@ COLOR_A = "#545454"
 COLOR_B = "#E3C88A"
 COLOR_C = "#8DD1C6"
 COLOR_D = "#965021"
-COLOR_AA = "#545454CC"  # Alpha ~80/255 -> 0.31 -> maybe just use native matplotlib alpha instead of hex
+COLOR_AA = "#545454CC"
 COLOR_BB = "#E3C88ACC"
 COLOR_CC = "#8DD1C6CC"
 
@@ -109,17 +109,12 @@ def write_plots(
         chr_wide_upper_limit = max(0.65, max_h_whis) * 1.25
         chr_wide_lower_limit = min(-0.95, min_l_whis) * 1.25
     else:
-        # e.g., '[-2,2]'
         cleaned_ylim = ylim_str.replace("[", "").replace("]", "")
         parts = cleaned_ylim.split(",")
         chr_wide_lower_limit = float(parts[0])
         chr_wide_upper_limit = float(parts[1])
 
-    dot_sizes = (
-        (weights / np.pi) ** 0.5 * 0.8 * 10
-    )  # adjust multiplier for matplotlib scatter size
-
-    # Default colors
+    dot_sizes = (weights / np.pi) ** 0.5 * 0.8 * 10
     dot_cols = np.array([COLOR_A] * len(ratios), dtype=object)
 
     for ab in results_c:
@@ -356,7 +351,7 @@ def write_plots(
             markeredgecolor="none",
         ),
         showfliers=False,
-    )  # R's outpch=16 means it shows outliers but we can just let matplotlib do it. Let's do showfliers=True
+    )
 
     if len(chrs) > 22:
         ax_box.boxplot(

@@ -85,7 +85,6 @@ platforms = ["linux-64", "osx-arm64", "linux-aarch64"]
 python = ">=3.10"
 r = ">=4.5,<4.6"
 r-jsonlite = ">=2.0.0,<3"
-r-png = ">=0.1_8,<0.2"
 bioconductor-dnacopy = ">=1.84.0,<2"
 matplotlib-base = ">=3.10.8,<4"
 pandas = ">=3.0.1,<4"
