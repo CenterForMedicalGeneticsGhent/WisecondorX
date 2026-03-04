@@ -286,8 +286,8 @@ def wcx_predict(
         seed=seed,
         ref_sex=reference_sex,
         binsize=reference_binsize,
-        ratios=results["ratios"],
-        weights=results["weights"],
+        ratios_per_chr=results["ratios"],
+        weights_per_chr=results["weights"],
     )
 
     segment_zscores = get_z_score(
@@ -297,9 +297,14 @@ def wcx_predict(
         results["weights"],
     )
 
-    for i in range(len(segments)):
-        segments[i].append(segment_zscores[i])
-    results["segments"] = segments
+    segments_w_zscores = []
+    for i, segment in enumerate(segments):
+        chr, start, stop, ratio = segment
+        segments_w_zscores.append(
+            (chr, start, stop, ratio, segment_zscores[i])
+        )
+
+    results["segments"] = segments_w_zscores
     if bed:
         logging.info("Writing tables ...")
         write_tables(
@@ -312,9 +317,7 @@ def wcx_predict(
             zscore=zscore,
             sex=sample_sex,
             n_reads=sample_total_reads,
-            ratios=ratios,
-            weights=weights,
-            segments=segments,
+            results=results,
         )
 
     if plot:
@@ -790,17 +793,18 @@ def write_segments_and_aberrations_bed(
     aberrations_file.write("chr\tstart\tend\tratio\tzscore\ttype\n")
 
     for segment in results["segments"]:
-        chr_name = str(segment[0] + 1)
+        seg_chr, seg_start, seg_stop, seg_ratio, seg_zscore = segment
+        chr_name = seg_chr + 1
         if chr_name == "23":
             chr_name = "X"
         if chr_name == "24":
             chr_name = "Y"
         row = [
             chr_name,
-            int(segment[1] * binsize + 1),
-            int(segment[2] * binsize),
-            segment[4],
-            segment[3],
+            int(seg_start * binsize + 1),
+            int(seg_stop * binsize),
+            seg_ratio,
+            seg_zscore,
         ]
         segments_file.write("{}\n".format("\t".join([str(x) for x in row])))
 
@@ -811,22 +815,22 @@ def write_segments_and_aberrations_bed(
         if beta:
             loss_cutoff = float(np.log2((ploidy - (beta / 2)) / ploidy))
             gain_cutoff = float(np.log2((ploidy + (beta / 2)) / ploidy))
-            if float(segment[4]) > gain_cutoff:
+            if float(seg_ratio) > gain_cutoff:
                 aberrations_file.write(
                     "{}\tgain\n".format("\t".join([str(x) for x in row]))
                 )
-            elif float(segment[4]) < loss_cutoff:
+            elif float(seg_ratio) < loss_cutoff:
                 aberrations_file.write(
                     "{}\tloss\n".format("\t".join([str(x) for x in row]))
                 )
-        elif isinstance(segment[3], str):
+        elif isinstance(seg_zscore, str):
             continue
         else:
-            if float(segment[3]) > zscore:
+            if float(seg_zscore) > zscore:
                 aberrations_file.write(
                     "{}\tgain\n".format("\t".join([str(x) for x in row]))
                 )
-            elif float(segment[3]) < -zscore:
+            elif float(seg_zscore) < -zscore:
                 aberrations_file.write(
                     "{}\tloss\n".format("\t".join([str(x) for x in row]))
                 )
@@ -849,11 +853,18 @@ def write_statistics_file(
     binsize: int,
     sex: Sex,
     n_reads: int,
-    ratios,
-    segments,
-    weights,
+    results,
 ) -> None:
-    chr_stats: list[ChrStats] = []
+    segments = results["segments"]
+    ratios = results["ratios"]
+    null_ratios = results["null_ratios"]
+    weights = results["weights"]
+    stats_file = open(f"{prefix}_statistics.txt", "w")
+    stats_file.write("chr\tratio.mean\tratio.median\tzscore\n")
+    chr_ratio_means = []
+    chr_ratio_medians = []
+    results_c_chr = []
+
     for chr in range(len(ratios)):
         chr_name = str(chr + 1)
         if chr_name == "23":
@@ -861,30 +872,49 @@ def write_statistics_file(
         if chr_name == "24":
             chr_name = "Y"
 
-        ratio_mean = np.ma.average(ratios[chr], weights=weights[chr])
-        ratio_median = np.median([x for x in ratios[chr] if x != 0])
-        # result_c = [chr, 0, bins_per_chr[chr] - 1, ratio_mean]
-        # zscore = get_z_score(result_c, results)[0]
-        zscore = None
+        chr_ratio_means.append(
+            np.ma.average(ratios[chr], weights=weights[chr])
+        )
+        chr_ratio_medians.append(np.median([x for x in ratios[chr] if x != 0]))
+        results_c_chr.append(
+            [chr, 0, bins_per_chr[str(chr + 1)], chr_ratio_means[chr]]
+        )
 
-        chr_stats.append(ChrStats(chr_name, ratio_mean, ratio_median, zscore))
+    print(results_c_chr)
+    chr_z_scores = get_z_score(results_c_chr, ratios, null_ratios, weights)
 
-    stats_json = open(Path(f"{prefix}_statistics.json"), "w")
-    stats_dict = {
-        "sex": sex,
-        "n_reads": n_reads,
-        "chr_stats": chr_stats,
-        "ratio_stdev": round(
-            float(np.nanstd([c.ratio_mean for c in chr_stats])), 4
-        ),
-        "msv": round(
-            get_median_segment_variance(segments, ratios),
-            4,
-        ),
-        "cpa": round(get_cpa(segments, binsize), 4),
-    }
-    json.dump(stats_dict, stats_json, indent=4)
-    stats_json.close()
+    for chr in range(len(ratios)):
+        stats_file.write(
+            "\t".join(
+                [
+                    str(x)
+                    for x in [
+                        chr_name,
+                        chr_ratio_means[chr],
+                        chr_ratio_medians[chr],
+                        chr_z_scores[chr],
+                    ]
+                ]
+            )
+            + "\n"
+        )
+
+    stats_file.write(
+        f"Gender based on --yfrac (or manually overridden by --gender): {sex.value}\n"
+    )
+    stats_file.write(f"Number of reads: {n_reads}\n")
+    stats_file.write(
+        f"Standard deviation of the ratios per chromosome: {np.nanstd(chr_ratio_means):5}\n"
+    )
+    msv = round(get_median_segment_variance(segments, ratios), 4)
+    stats_file.write(
+        f"Median segment variance per bin (doi: 10.1093/nar/gky1263): {msv}\n"
+    )
+    cpa = round(get_cpa(segments, binsize), 4)
+    stats_file.write(
+        f"Copy number profile abnormality (CPA) score (doi: 10.1186/s13073-020-00735-4): {cpa}\n"
+    )
+    stats_file.close()
 
 
 def get_cpa(segments, binsize: int) -> float:
