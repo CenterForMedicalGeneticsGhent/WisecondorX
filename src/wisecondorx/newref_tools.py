@@ -94,7 +94,10 @@ def get_mask(samples):
     all_data = all_data / sum_per_sample
 
     sum_per_bin = np.sum(all_data, 1)
-    mask = sum_per_bin > 0
+    # Mask out bins with 0 reads OR reads less than 5% of the median coverage
+    # to reduce noise from small binsizes
+    median_cov = np.median(sum_per_bin[sum_per_bin > 0])
+    mask = sum_per_bin > (0.05 * median_cov)
 
     return mask, bins_per_chr
 
