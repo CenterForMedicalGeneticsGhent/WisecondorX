@@ -131,6 +131,9 @@ def tool_newref(args):
 
     tool_newref_merge(args, outfiles, trained_cutoff)
 
+    logging.info("Running QC on the newly created reference...")
+    qc_reference(args.outfile)
+
     logging.info("Finished creating reference")
 
 
