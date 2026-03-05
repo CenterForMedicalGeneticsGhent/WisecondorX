@@ -59,7 +59,12 @@ def train_gender_model(args, samples):
 
         local_min_i = argrelextrema(sorted_gmm_y, np.less)
 
-        cut_off = gmm_x[local_min_i][0]
+        if len(local_min_i[0]) > 0:
+            cut_off = gmm_x[local_min_i][0]
+        else:
+            cut_off = float(np.mean(gmm.means_))
+            logging.warning("No local minimum found, using mean of GMM components as fallback")
+
         logging.info("Determined --yfrac cutoff: {}".format(str(round(cut_off, 4))))
 
     genders[y_fractions > cut_off] = "M"
