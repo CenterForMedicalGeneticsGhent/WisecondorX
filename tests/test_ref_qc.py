@@ -1,6 +1,8 @@
 import unittest
 
-from wisecondorx.ref_qc import _verdict_m
+import numpy as np
+
+from wisecondorx.ref_qc import _legacy_autosomal_prefix_compat_issues, _verdict_m
 
 
 class TestRefQc(unittest.TestCase):
@@ -35,6 +37,30 @@ class TestRefQc(unittest.TestCase):
         verdict, msg = _verdict_m(metrics)
         self.assertEqual(verdict, "FAIL")
         self.assertIn("usable chrY bins", msg)
+
+    def test_legacy_autosomal_prefix_compat_detects_mismatch(self):
+        ref = {
+            "bins_per_chr": np.array([1] * 22, dtype=int),
+            "masked_bins_per_chr_cum": np.arange(1, 23, dtype=int),
+            "mask": np.array([True] * 22, dtype=bool),
+            "bins_per_chr.F": np.array([1] * 23, dtype=int),
+            "masked_bins_per_chr_cum.F": np.array(list(range(1, 23)) + [23], dtype=int),
+            "mask.F": np.array([True] * 21 + [False, True], dtype=bool),
+        }
+        issues = _legacy_autosomal_prefix_compat_issues(ref)
+        self.assertTrue(len(issues) > 0)
+
+    def test_legacy_autosomal_prefix_compat_accepts_matching_prefix(self):
+        ref = {
+            "bins_per_chr": np.array([1] * 22, dtype=int),
+            "masked_bins_per_chr_cum": np.arange(1, 23, dtype=int),
+            "mask": np.array([True] * 22, dtype=bool),
+            "bins_per_chr.F": np.array([1] * 23, dtype=int),
+            "masked_bins_per_chr_cum.F": np.array(list(range(1, 23)) + [23], dtype=int),
+            "mask.F": np.array([True] * 23, dtype=bool),
+        }
+        issues = _legacy_autosomal_prefix_compat_issues(ref)
+        self.assertEqual(issues, [])
 
 
 if __name__ == "__main__":

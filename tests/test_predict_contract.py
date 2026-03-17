@@ -62,6 +62,18 @@ class TestPredictContract(unittest.TestCase):
         self.assertEqual(np.ndim(results_r), 1)
         self.assertEqual(np.ndim(results_z), 1)
 
+    def test_legacy_append_inflate_contract_requires_aligned_lengths(self):
+        from wisecondorx.predict_tools import inflate_results
+
+        # Old predict behavior: len(appended_results) must equal number of True bins in
+        # branch mask passed to inflate_results.
+        rem_input = {"mask": np.array([True, False, True, True, False, True])}
+        appended_results = np.array([1.0, 2.0, 3.0, 4.0])
+
+        inflated = inflate_results(appended_results, rem_input)
+        self.assertEqual(len(inflated), len(rem_input["mask"]))
+        self.assertEqual(sum(x != 0 for x in inflated), int(np.sum(rem_input["mask"])))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -110,6 +110,57 @@ def _compute_metrics(ref, suf):
     }
 
 
+def _legacy_autosomal_prefix_compat_issues(ref):
+    issues = []
+    if (
+        "mask" not in ref
+        or "bins_per_chr" not in ref
+        or "masked_bins_per_chr_cum" not in ref
+    ):
+        return issues
+
+    a_bins = np.atleast_1d(ref["bins_per_chr"][...])
+    a_cum = np.atleast_1d(ref["masked_bins_per_chr_cum"][...])
+    if len(a_bins) < 22 or len(a_cum) < 22:
+        return issues
+
+    a_autosomal_span = int(np.sum(a_bins[:22]))
+    a_autosomal_masked = int(a_cum[21])
+    a_autosomal_prefix = np.atleast_1d(ref["mask"][...])[:a_autosomal_span]
+
+    for suf in [".F", ".M"]:
+        bins_key = "bins_per_chr{}".format(suf)
+        cum_key = "masked_bins_per_chr_cum{}".format(suf)
+        mask_key = "mask{}".format(suf)
+        if bins_key not in ref or cum_key not in ref or mask_key not in ref:
+            continue
+
+        s_bins = np.atleast_1d(ref[bins_key][...])
+        s_cum = np.atleast_1d(ref[cum_key][...])
+        if len(s_bins) < 22 or len(s_cum) < 22:
+            continue
+
+        s_autosomal_span = int(np.sum(s_bins[:22]))
+        s_autosomal_masked = int(s_cum[21])
+        if s_autosomal_masked != a_autosomal_masked:
+            issues.append(
+                "{} autosomal masked bins ({}) differ from A ({})".format(
+                    suf, s_autosomal_masked, a_autosomal_masked
+                )
+            )
+
+        s_autosomal_prefix = np.atleast_1d(ref[mask_key][...])[:s_autosomal_span]
+        if s_autosomal_span != a_autosomal_span or not np.array_equal(
+            s_autosomal_prefix, a_autosomal_prefix
+        ):
+            issues.append(
+                "{} autosomal mask prefix differs from A (legacy predict incompatible)".format(
+                    suf
+                )
+            )
+    return issues
+
+
 def _verdict_f(m):
     if m is None or m.get("n_valid", 0) == 0:
         return "FAIL", "no data"
@@ -202,6 +253,12 @@ def qc_reference(npz_path: Path):
         logging.info("Reference binsize: (unknown)")
 
     worst = 0  # 0 pass, 1 warn, 2 fail
+    compat_issues = _legacy_autosomal_prefix_compat_issues(ref)
+    for issue in compat_issues:
+        logging.error("[COMPAT] {}".format(issue))
+    if compat_issues:
+        worst = max(worst, 2)
+
     for suf in suffixes:
         label = "F" if suf == ".F" else "M" if suf == ".M" else "A"
         m = _compute_metrics(ref, suf)
