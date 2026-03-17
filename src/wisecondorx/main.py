@@ -24,6 +24,37 @@ from wisecondorx.predict_tools import (
     apply_blacklist,
     predict_gender,
 )
+from wisecondorx.ref_qc import qc_reference
+
+
+def _build_branch_masks(samples, genders, is_nipt):
+    total_mask, bins_per_chr = get_mask(samples)
+
+    bins_per_chr = np.array(bins_per_chr, dtype=int)
+    chr22_end = int(np.sum(bins_per_chr[:22]))
+    chr23_end = int(np.sum(bins_per_chr[:23]))
+    chr24_end = int(np.sum(bins_per_chr[:24]))
+
+    mask_a = np.zeros_like(total_mask, dtype=bool)
+    mask_a[:chr22_end] = total_mask[:chr22_end]
+
+    mask_f = None
+    if genders.count("F") > 4:
+        female_mask, _ = get_mask(samples[np.array(genders) == "F"])
+        mask_f = np.copy(mask_a)
+        if len(female_mask) >= chr23_end:
+            mask_f[chr22_end:chr23_end] = female_mask[chr22_end:chr23_end]
+
+    mask_m = None
+    if genders.count("M") > 4 and not is_nipt:
+        male_mask, _ = get_mask(samples[np.array(genders) == "M"])
+        mask_m = np.copy(mask_a)
+        if len(male_mask) >= chr23_end:
+            mask_m[chr22_end:chr23_end] = male_mask[chr22_end:chr23_end]
+        if len(male_mask) >= chr24_end:
+            mask_m[chr23_end:chr24_end] = male_mask[chr23_end:chr24_end]
+
+    return bins_per_chr.tolist(), mask_a, mask_f, mask_m
 
 
 def tool_convert(args):
@@ -79,20 +110,16 @@ def tool_newref(args):
         for i, sample in enumerate(samples):
             samples[i] = gender_correct(sample, genders[i])
 
-    total_mask, bins_per_chr = get_mask(samples)
-    if genders.count("F") > 4:
-        mask_F, _ = get_mask(samples[np.array(genders) == "F"])
-        total_mask = total_mask & mask_F
-    if genders.count("M") > 4 and not args.nipt:
-        mask_M, _ = get_mask(samples[np.array(genders) == "M"])
-        total_mask = total_mask & mask_M
+    bins_per_chr, mask_A, mask_F, mask_M = _build_branch_masks(
+        samples, genders, args.nipt
+    )
 
     outfiles = []
     if len(genders) > 9:
         logging.info("Starting autosomal reference creation ...")
         args.tmpoutfile = "{}.tmp.A.npz".format(args.basepath)
         outfiles.append(args.tmpoutfile)
-        tool_newref_prep(args, samples, "A", total_mask, bins_per_chr)
+        tool_newref_prep(args, samples, "A", mask_A, bins_per_chr)
         logging.info("This might take a while ...")
         tool_newref_main(args, args.cpus)
     else:
@@ -106,7 +133,7 @@ def tool_newref(args):
         args.tmpoutfile = "{}.tmp.F.npz".format(args.basepath)
         outfiles.append(args.tmpoutfile)
         tool_newref_prep(
-            args, samples[np.array(genders) == "F"], "F", total_mask, bins_per_chr
+            args, samples[np.array(genders) == "F"], "F", mask_F, bins_per_chr
         )
         logging.info("This might take a while ...")
         tool_newref_main(args, 1)
@@ -121,7 +148,7 @@ def tool_newref(args):
             args.tmpoutfile = "{}.tmp.M.npz".format(args.basepath)
             outfiles.append(args.tmpoutfile)
             tool_newref_prep(
-                args, samples[np.array(genders) == "M"], "M", total_mask, bins_per_chr
+                args, samples[np.array(genders) == "M"], "M", mask_M, bins_per_chr
             )
             tool_newref_main(args, 1)
         else:

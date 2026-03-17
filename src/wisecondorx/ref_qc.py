@@ -5,6 +5,8 @@ import numpy as np
 
 MINREFBINS = 150
 OUTLIER_N_SIGMA = 3
+CHRY_MIN_USABLE_PCT_WARN = 50.0
+CHRY_MIN_USABLE_PCT_FAIL = 20.0
 
 
 def _get_gender_suffixes(ref):
@@ -56,13 +58,19 @@ def _chrY_metrics(ref, suf, mean_d, n_refs, cutoff_outlier):
     n_valid = int(np.sum(valid))
     if n_valid == 0:
         return {"n_bins": end - start, "n_valid": 0, "mean_of_means": np.nan}
+    usable = valid & (r >= MINREFBINS)
+    n_usable = int(np.sum(usable))
+    n_bins = end - start
+    usable_pct = 100.0 * n_usable / max(n_bins, 1)
     return {
-        "n_bins": end - start,
+        "n_bins": n_bins,
         "n_valid": n_valid,
         "mean_of_means": float(np.mean(m[valid])),
         "std_of_means": float(np.std(m[valid])),
         "n_mean_outlier": int(np.sum(m[valid] >= cutoff_outlier)),
         "n_low_refs": int(np.sum(r < MINREFBINS)),
+        "n_usable": n_usable,
+        "usable_pct": usable_pct,
     }
 
 
@@ -119,22 +127,48 @@ def _verdict_f(m):
 def _verdict_m(m):
     if m is None or m.get("n_valid", 0) == 0:
         return "FAIL", "no data"
+
+    level = "PASS"
+    msg = ""
+
+    def update(new_level, new_msg):
+        nonlocal level, msg
+        if new_level == "FAIL" or (new_level == "WARN" and level == "PASS"):
+            level = new_level
+            msg = new_msg
+
     if m["n_low_refs"] > 0:
-        return "WARN", f"n_refs<{MINREFBINS} in {m['n_low_refs']} bins"
+        update("WARN", f"n_refs<{MINREFBINS} in {m['n_low_refs']} bins")
     if m["mean_of_means"] > 10:
-        return "FAIL", f"mean(per-bin mean dist) = {m['mean_of_means']:.2f} (heavy tail)"
-    if m["mean_of_means"] > 2:
-        return "WARN", f"mean(per-bin mean dist) = {m['mean_of_means']:.2f}"
+        update(
+            "FAIL",
+            f"mean(per-bin mean dist) = {m['mean_of_means']:.2f} (heavy tail)",
+        )
+    elif m["mean_of_means"] > 2:
+        update("WARN", f"mean(per-bin mean dist) = {m['mean_of_means']:.2f}")
     cy = m.get("chrY")
+    if cy and cy.get("n_valid", 0) > 0:
+        usable_pct = cy.get("usable_pct", np.nan)
+        if np.isfinite(usable_pct):
+            if usable_pct < CHRY_MIN_USABLE_PCT_FAIL:
+                update(
+                    "FAIL",
+                    f"usable chrY bins = {usable_pct:.1f}% (<{CHRY_MIN_USABLE_PCT_FAIL:.0f}%)",
+                )
+            elif usable_pct < CHRY_MIN_USABLE_PCT_WARN:
+                update(
+                    "WARN",
+                    f"usable chrY bins = {usable_pct:.1f}% (<{CHRY_MIN_USABLE_PCT_WARN:.0f}%)",
+                )
     if cy and cy.get("n_valid", 0) > 0 and np.isfinite(cy.get("mean_of_means", np.nan)):
         ym = cy["mean_of_means"]
         if ym > 100:
-            return "FAIL", f"chrY mean distance = {ym:.1f} (very poor chrY)"
-        if ym > 5:
-            return "WARN", f"chrY mean distance = {ym:.1f}"
+            update("FAIL", f"chrY mean distance = {ym:.1f} (very poor chrY)")
+        elif ym > 5:
+            update("WARN", f"chrY mean distance = {ym:.1f}")
     if m["outlier_pct"] > 1:
-        return "WARN", f"outlier bins = {m['outlier_pct']:.2f}%"
-    return "PASS", ""
+        update("WARN", f"outlier bins = {m['outlier_pct']:.2f}%")
+    return level, msg
 
 
 def qc_reference(npz_path: Path):
@@ -199,7 +233,8 @@ def qc_reference(npz_path: Path):
             cy = m["chrY"]
             logger_func(
                 f"       chrY: n_bins={cy['n_bins']}, mean={cy['mean_of_means']:.4f}, std={cy['std_of_means']:.4f}, "
-                f"outliers={cy['n_mean_outlier']}, n_refs<{MINREFBINS}={cy['n_low_refs']}"
+                f"outliers={cy['n_mean_outlier']}, n_refs<{MINREFBINS}={cy['n_low_refs']}, "
+                f"usable={cy.get('n_usable', 0)} ({cy.get('usable_pct', np.nan):.2f}%)"
             )
 
         logger_func(f"         -> {verdict}" + (f": {msg}" if msg else ""))
