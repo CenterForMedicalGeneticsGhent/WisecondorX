@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 
@@ -234,6 +235,11 @@ def qc_reference(npz_path: Path):
         logging.error(f"QC check skipped: file not found: {npz}")
         return 2
 
+    if npz.suffix == '.npz':
+        out_json = npz.with_name(npz.stem + '_qc.json')
+    else:
+        out_json = npz.with_name(npz.name + '_qc.json')
+
     ref = np.load(npz, encoding="latin1", allow_pickle=True)
     try:
         binsize = int(np.atleast_1d(ref["binsize"])[0])
@@ -254,6 +260,14 @@ def qc_reference(npz_path: Path):
 
     worst = 0  # 0 pass, 1 warn, 2 fail
     compat_issues = _legacy_autosomal_prefix_compat_issues(ref)
+    
+    qc_data = {
+        "overall_verdict": "PASS",
+        "worst_severity": 0,
+        "compat_issues": compat_issues,
+        "metrics": {}
+    }
+
     for issue in compat_issues:
         logging.error("[COMPAT] {}".format(issue))
     if compat_issues:
@@ -265,13 +279,29 @@ def qc_reference(npz_path: Path):
         if m is None:
             logging.warning(f"[{label}] no indexes/distances — skip")
             continue
+            
+        qc_data["metrics"][label] = {"n_bins": m.get("n_bins")}
+        
         if m.get("n_valid", 0) == 0:
             logging.error(f"[{label}] n_bins={m['n_bins']}, n_valid=0 — FAIL")
             worst = max(worst, 2)
+            qc_data["metrics"][label]["n_valid"] = 0
+            qc_data["metrics"][label]["verdict"] = "FAIL"
             continue
 
         verdict_fn = _verdict_m if label == "M" else _verdict_f
         verdict, msg = verdict_fn(m)
+        
+        qc_data["metrics"][label].update({
+            "n_valid": m.get("n_valid", 0),
+            "verdict": verdict,
+            "message": msg,
+            "mean_of_means": m["mean_of_means"],
+            "std_of_means": m["std_of_means"],
+            "n_mean_outlier": m["n_mean_outlier"],
+            "outlier_pct": m["outlier_pct"],
+            "n_low_refs": m["n_low_refs"]
+        })
 
         if verdict == "FAIL":
             worst = max(worst, 2)
@@ -288,6 +318,7 @@ def qc_reference(npz_path: Path):
         )
         if m.get("chrY") and m["chrY"].get("n_valid", 0) > 0:
             cy = m["chrY"]
+            qc_data["metrics"][label]["chrY"] = cy
             logger_func(
                 f"       chrY: n_bins={cy['n_bins']}, mean={cy['mean_of_means']:.4f}, std={cy['std_of_means']:.4f}, "
                 f"outliers={cy['n_mean_outlier']}, n_refs<{MINREFBINS}={cy['n_low_refs']}, "
@@ -300,11 +331,23 @@ def qc_reference(npz_path: Path):
 
     if worst == 0:
         logging.info("QC Overall Verdict: PASS")
+        qc_data["overall_verdict"] = "PASS"
     elif worst == 1:
         logging.warning("QC Overall Verdict: WARN (review metrics above)")
+        qc_data["overall_verdict"] = "WARN"
     else:
         logging.error(
             "QC Overall Verdict: FAIL (ref may cause poor predictions; consider rebuilding or more samples)"
         )
+        qc_data["overall_verdict"] = "FAIL"
+
+    qc_data["worst_severity"] = worst
+
+    try:
+        with open(out_json, "w") as f:
+            json.dump(qc_data, f, indent=4)
+        logging.info(f"Wrote structured QC data to {out_json}")
+    except Exception as e:
+        logging.error(f"Failed to write structured QC data to {out_json}: {e}")
 
     return worst
