@@ -3920,7 +3920,7 @@ packages:
 - pypi: ./
   name: wisecondorx
   version: 1.3.0
-  sha256: ae109a78d6b00722369a5c4e6f71406f8eb253f5a55f3790a80ea0b94d99c4ad
+  sha256: 42e6f50ebb34a1c6121d029903f07246100474c5ec6087297a24529e8e515278
   requires_dist:
   - scipy>=1.17
   - scikit-learn>=1.8
