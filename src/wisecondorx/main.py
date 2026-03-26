@@ -455,7 +455,7 @@ def main():
     parser_test.add_argument(
         "--maskrepeats",
         type=int,
-        default=5,
+        default=2,
         help="Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.",
     )
     parser_test.add_argument(
