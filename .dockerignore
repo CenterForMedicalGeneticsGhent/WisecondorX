@@ -8,6 +8,7 @@
 .venv
 .venv*
 .tox
+.pixi/
 
 __pycache__
 *.pyc

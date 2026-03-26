@@ -22,22 +22,33 @@ Note that it is important that **no** read quality filtering is executed prior t
 requires low-quality reads to distinguish informative bins from non-informative ones.
 
 ## WisecondorX
-
 ### Installation
+
+Stable releases can be installed through pixi (recommended for reproducibility), pip, or conda.
+
+#### Pixi (Recommended)
+
+```bash
+git clone https://github.com/CenterForMedicalGeneticsGhent/WisecondorX.git
+cd WisecondorX
+pixi install
+```
+
+#### Pip
 
 Stable releases can be installed through pip install. This option ascertains the latest version is
 downloaded, however, it does not install R [dependencies](#dependencies).
 
 ```bash
-
 pip install -U git+https://github.com/CenterForMedicalGeneticsGhent/WisecondorX
 ```
+
+#### Conda
 
 Alternatively, [Conda](https://conda.io/docs/) additionally installs all necessary [depedencies](#dependencies),
 however, the latest version might not be downloaded.
 
 ```bash
-
 conda install -f -c conda-forge -c bioconda wisecondorx
 ```
 
