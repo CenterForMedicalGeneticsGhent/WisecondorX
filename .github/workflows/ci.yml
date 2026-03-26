@@ -11,7 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: j178/prek-action@v2
+      - name: Run prek checks
+        uses: j178/prek-action@v2
+        with:
+          # Colored output 
+          extra_args: --color=always
+      - name: Ensure no changes were made (Check-only)
+        # Fails the job if any hook modified files (keeping working tree clean)
+        run: git diff --exit-code
 
   test:
     runs-on: ubuntu-latest
