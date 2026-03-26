@@ -41,7 +41,9 @@ class TestNewrefContract(unittest.TestCase):
             _write_component(m_path, "M", 24)
 
             args = SimpleNamespace(outfile=out_path, nipt=False)
-            tool_newref_merge(args, [a_path, f_path, m_path], trained_cutoff=0.005)
+            tool_newref_merge(
+                args, [a_path, f_path, m_path], trained_cutoff=0.005
+            )
 
             merged = np.load(out_path, allow_pickle=True)
             try:
@@ -83,7 +85,9 @@ class TestNewrefContract(unittest.TestCase):
                     autosomal_prefix_s = merged["mask{}".format(suffix)][
                         :autosomal_span_s
                     ]
-                    self.assertTrue(np.array_equal(autosomal_prefix_s, autosomal_prefix_a))
+                    self.assertTrue(
+                        np.array_equal(autosomal_prefix_s, autosomal_prefix_a)
+                    )
 
                     # Old predict appends A autosomes + branch gonosomal tail and then
                     # inflates against branch mask; lengths must align.
@@ -92,7 +96,10 @@ class TestNewrefContract(unittest.TestCase):
                     )
                     gonosomal_tail_s = total_masked_s - autosomal_masked_s
                     appended_len = autosomal_masked_a + gonosomal_tail_s
-                    self.assertEqual(appended_len, int(np.sum(merged["mask{}".format(suffix)])))
+                    self.assertEqual(
+                        appended_len,
+                        int(np.sum(merged["mask{}".format(suffix)])),
+                    )
             finally:
                 merged.close()
 
@@ -104,7 +111,8 @@ class TestNewrefContract(unittest.TestCase):
         mask = np.ones(total_bins, dtype=bool)
 
         vals = np.resize(
-            np.array([-3, -2, -1, 0, 1, 2, 3, -2, 2, 0], dtype=float), total_bins
+            np.array([-3, -2, -1, 0, 1, 2, 3, -2, 2, 0], dtype=float),
+            total_bins,
         )
         autosome_outlier = 5
         chry_start = int(np.sum(bins_per_chr[:23]))
@@ -135,12 +143,15 @@ class TestNewrefContract(unittest.TestCase):
                 prepdatafile=os.path.join(tmpdir, "prep_data.npy"),
                 prepfile=os.path.join(tmpdir, "prep.npz"),
             )
-            with patch(
-                "wisecondorx.newref_control.normalize_and_mask",
-                side_effect=fake_normalize_and_mask,
-            ), patch(
-                "wisecondorx.newref_control.train_pca",
-                side_effect=fake_train_pca,
+            with (
+                patch(
+                    "wisecondorx.newref_control.normalize_and_mask",
+                    side_effect=fake_normalize_and_mask,
+                ),
+                patch(
+                    "wisecondorx.newref_control.train_pca",
+                    side_effect=fake_train_pca,
+                ),
             ):
                 tool_newref_prep(
                     args,
@@ -159,7 +170,9 @@ class TestNewrefContract(unittest.TestCase):
             finally:
                 prep.close()
 
-    def test_tool_newref_prep_autosomal_pruning_still_applies_in_a_branch(self):
+    def test_tool_newref_prep_autosomal_pruning_still_applies_in_a_branch(
+        self,
+    ):
         from wisecondorx.newref_control import tool_newref_prep
 
         bins_per_chr = [10] * 22
@@ -167,7 +180,8 @@ class TestNewrefContract(unittest.TestCase):
         mask = np.ones(total_bins, dtype=bool)
 
         vals = np.resize(
-            np.array([-3, -2, -1, 0, 1, 2, 3, -2, 2, 0], dtype=float), total_bins
+            np.array([-3, -2, -1, 0, 1, 2, 3, -2, 2, 0], dtype=float),
+            total_bins,
         )
         autosome_outlier = 5
         vals[autosome_outlier] = 7.0
@@ -195,12 +209,15 @@ class TestNewrefContract(unittest.TestCase):
                 prepdatafile=os.path.join(tmpdir, "prep_data.npy"),
                 prepfile=os.path.join(tmpdir, "prep.npz"),
             )
-            with patch(
-                "wisecondorx.newref_control.normalize_and_mask",
-                side_effect=fake_normalize_and_mask,
-            ), patch(
-                "wisecondorx.newref_control.train_pca",
-                side_effect=fake_train_pca,
+            with (
+                patch(
+                    "wisecondorx.newref_control.normalize_and_mask",
+                    side_effect=fake_normalize_and_mask,
+                ),
+                patch(
+                    "wisecondorx.newref_control.train_pca",
+                    side_effect=fake_train_pca,
+                ),
             ):
                 tool_newref_prep(
                     args,
@@ -220,4 +237,3 @@ class TestNewrefContract(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

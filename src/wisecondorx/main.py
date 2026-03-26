@@ -157,7 +157,11 @@ def tool_newref(args):
             if mask_M_sex is not None:
                 mask_M[chr22_end:chr24_end] = mask_M_sex[chr22_end:chr24_end]
             tool_newref_prep(
-                args, samples[np.array(genders) == "M"], "M", mask_M, bins_per_chr
+                args,
+                samples[np.array(genders) == "M"],
+                "M",
+                mask_M,
+                bins_per_chr,
             )
             tool_newref_main(args, 1)
         else:
@@ -184,7 +188,9 @@ def tool_test(args):
         sys.exit()
 
     if args.zscore <= 0:
-        logging.critical("Parameter --zscore should be a strictly positive number")
+        logging.critical(
+            "Parameter --zscore should be a strictly positive number"
+        )
         sys.exit()
 
     if args.beta is not None:
@@ -267,7 +273,9 @@ def tool_test(args):
         "gender": gender,
         "mask": ref_file["mask.{}".format(ref_gender)],
         "bins_per_chr": ref_file["bins_per_chr.{}".format(ref_gender)],
-        "masked_bins_per_chr": ref_file["masked_bins_per_chr.{}".format(ref_gender)],
+        "masked_bins_per_chr": ref_file[
+            "masked_bins_per_chr.{}".format(ref_gender)
+        ],
         "masked_bins_per_chr_cum": ref_file[
             "masked_bins_per_chr_cum.{}".format(ref_gender)
         ],
@@ -278,7 +286,8 @@ def tool_test(args):
     results_r = np.append(results_r, results_r_2)
     results_z = np.append(results_z, results_z_2) - m_z
     results_w = np.append(
-        results_w * np.nanmean(results_w_2), results_w_2 * np.nanmean(results_w)
+        results_w * np.nanmean(results_w_2),
+        results_w_2 * np.nanmean(results_w),
     )
     results_w = results_w / np.nanmean(results_w)
 
@@ -290,7 +299,11 @@ def tool_test(args):
 
     ref_sizes = np.append(ref_sizes, ref_sizes_2)
 
-    null_ratios = np.array([x.tolist() for x in null_ratios_aut_per_bin] + [x.tolist() for x in null_ratios_gon_per_bin], dtype=object)
+    null_ratios = np.array(
+        [x.tolist() for x in null_ratios_aut_per_bin]
+        + [x.tolist() for x in null_ratios_gon_per_bin],
+        dtype=object,
+    )
 
     results = {
         "results_r": results_r,
@@ -328,7 +341,9 @@ def tool_test(args):
 def output_gender(args):
     ref_file = np.load(args.reference, encoding="latin1", allow_pickle=True)
     sample_file = np.load(args.infile, encoding="latin1", allow_pickle=True)
-    gender = predict_gender(sample_file["sample"].item(), ref_file["trained_cutoff"])
+    gender = predict_gender(
+        sample_file["sample"].item(), ref_file["trained_cutoff"]
+    )
     if gender == "M":
         print("male")
     else:
@@ -416,7 +431,10 @@ def main():
         help="Scale samples to this binsize, multiples of existing binsize only",
     )
     parser_newref.add_argument(
-        "--cpus", type=int, default=1, help="Use multiple cores to find reference bins"
+        "--cpus",
+        type=int,
+        default=1,
+        help="Use multiple cores to find reference bins",
     )
     parser_newref.set_defaults(func=tool_newref)
 
@@ -428,7 +446,9 @@ def main():
     )
     parser_gender.add_argument("infile", type=str, help=".npz input file")
     parser_gender.add_argument(
-        "reference", type=str, help="Reference .npz, as previously created with newref"
+        "reference",
+        type=str,
+        help="Reference .npz, as previously created with newref",
     )
     parser_gender.set_defaults(func=output_gender)
 
@@ -439,7 +459,9 @@ def main():
     )
     parser_test.add_argument("infile", type=str, help=".npz input file")
     parser_test.add_argument(
-        "reference", type=str, help="Reference .npz, as previously created with newref"
+        "reference",
+        type=str,
+        help="Reference .npz, as previously created with newref",
     )
     parser_test.add_argument(
         "outid",
@@ -500,7 +522,9 @@ def main():
         action="store_true",
         help="Outputs tab-delimited .bed files, containing the most important information",
     )
-    parser_test.add_argument("--plot", action="store_true", help="Outputs .png plots")
+    parser_test.add_argument(
+        "--plot", action="store_true", help="Outputs .png plots"
+    )
     parser_test.add_argument(
         "--cairo",
         action="store_true",
@@ -512,7 +536,10 @@ def main():
         help="Add the output name as plot title",
     )
     parser_test.add_argument(
-        "--seed", type=int, default=None, help="Seed for segmentation algorithm"
+        "--seed",
+        type=int,
+        default=None,
+        help="Seed for segmentation algorithm",
     )
     parser_test.add_argument(
         "--regions",

@@ -9,7 +9,11 @@ import time
 import numpy as np
 from concurrent import futures
 
-from wisecondorx.newref_tools import normalize_and_mask, train_pca, get_reference
+from wisecondorx.newref_tools import (
+    normalize_and_mask,
+    train_pca,
+    get_reference,
+)
 
 """
 Outputs preparation files of read depth normalized
@@ -88,7 +92,8 @@ def tool_newref_prep(args, samples, gender, mask, bins_per_chr):
         for i, x in enumerate(bins_per_chr)
     ]
     masked_bins_per_chr_cum = [
-        sum(masked_bins_per_chr[: x + 1]) for x in range(len(masked_bins_per_chr))
+        sum(masked_bins_per_chr[: x + 1])
+        for x in range(len(masked_bins_per_chr))
     ]
 
     np.save(args.prepdatafile, pca_corrected_data)
@@ -120,7 +125,9 @@ def tool_newref_main(args, cpus):
             for part in range(1, cpus + 1):
                 this_args = copy.copy(args)
                 this_args.part = [part, cpus]
-                executor.submit(_tool_newref_part, this_args, pca_corrected_data)
+                executor.submit(
+                    _tool_newref_part, this_args, pca_corrected_data
+                )
             executor.shutdown(wait=True)
     else:
         for part in range(1, cpus + 1):
@@ -151,7 +158,9 @@ def _tool_newref_part(args, pca_corrected_data):
         sys.exit()
     if args.part[0] < 0:
         logging.critical(
-            "Part should be at least zero: {} < 0 is wrong".format(args.part[0])
+            "Part should be at least zero: {} < 0 is wrong".format(
+                args.part[0]
+            )
         )
         sys.exit()
 
@@ -227,7 +236,7 @@ def force_remove(file_id):
         try:
             os.remove(file_id)
             break
-        except:
+        except Exception:
             print(
                 "Attemp #{}: Cannot remove {}, because it is busy, trying again...".format(
                     attemp, file_id

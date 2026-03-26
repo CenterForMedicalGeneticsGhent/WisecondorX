@@ -48,11 +48,14 @@ def convert_reads(args):
     logging.info("Converting aligned reads ... This might take a while ...")
 
     for index, chr in enumerate(reads_file.references):
-
         chr_name = chr
         if chr_name[:3].lower() == "chr":
             chr_name = chr_name[3:]
-        if chr_name not in bins_per_chr and chr_name != "X" and chr_name != "Y":
+        if (
+            chr_name not in bins_per_chr
+            and chr_name != "X"
+            and chr_name != "Y"
+        ):
             continue
 
         logging.info(
@@ -61,7 +64,8 @@ def convert_reads(args):
             )
         )
         counts = np.zeros(
-            int(reads_file.lengths[index] / float(args.binsize) + 1), dtype=np.int32
+            int(reads_file.lengths[index] / float(args.binsize) + 1),
+            dtype=np.int32,
         )
         bam_chr = reads_file.fetch(chr)
 

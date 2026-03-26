@@ -4,7 +4,7 @@ channels:
 dependencies:
   - setuptools
   - pandas
-  - python >=3.6
+  - python >=3.10
   - pysam ==0.22
   - scipy ==1.13
   - scikit-learn ==1.4

@@ -35,9 +35,12 @@ def coverage_normalize_and_mask(sample, ref_file, ap):
     chrs = range(1, len(ref_file["bins_per_chr{}".format(ap)]) + 1)
 
     for chr in chrs:
-        this_chr = np.zeros(ref_file["bins_per_chr{}".format(ap)][chr - 1], dtype=float)
+        this_chr = np.zeros(
+            ref_file["bins_per_chr{}".format(ap)][chr - 1], dtype=float
+        )
         min_len = min(
-            ref_file["bins_per_chr{}".format(ap)][chr - 1], len(sample[str(chr)])
+            ref_file["bins_per_chr{}".format(ap)][chr - 1],
+            len(sample[str(chr)]),
         )
         this_chr[:min_len] = sample[str(chr)][:min_len]
         by_chr.append(this_chr)
@@ -108,7 +111,9 @@ def normalize_repeat(test_data, ref_file, optimal_cutoff, ct, cp, ap):
     return results_z, results_r, ref_sizes, m_lr, m_z
 
 
-def _normalize_once(test_data, test_copy, ref_file, optimal_cutoff, ct, cp, ap):
+def _normalize_once(
+    test_data, test_copy, ref_file, optimal_cutoff, ct, cp, ap
+):
     masked_bins_per_chr = ref_file["masked_bins_per_chr{}".format(ap)]
     masked_bins_per_chr_cum = ref_file["masked_bins_per_chr_cum{}".format(ap)]
     results_z = np.zeros(masked_bins_per_chr_cum[-1])[ct:]
@@ -124,7 +129,9 @@ def _normalize_once(test_data, test_copy, ref_file, optimal_cutoff, ct, cp, ap):
         end = masked_bins_per_chr_cum[chr]
         chr_data = np.concatenate(
             (
-                test_copy[: masked_bins_per_chr_cum[chr] - masked_bins_per_chr[chr]],
+                test_copy[
+                    : masked_bins_per_chr_cum[chr] - masked_bins_per_chr[chr]
+                ],
                 test_copy[masked_bins_per_chr_cum[chr] :],
             )
         )
@@ -150,7 +157,9 @@ CBS, Z-scoring and plotting.
 
 
 def get_weights(ref_file, ap):
-    inverse_weights = [np.mean(np.sqrt(x)) for x in ref_file["distances{}".format(ap)]]
+    inverse_weights = [
+        np.mean(np.sqrt(x)) for x in ref_file["distances{}".format(ap)]
+    ]
     weights = np.array([1 / x for x in inverse_weights])
     return weights
 
@@ -190,7 +199,9 @@ def log_trans(results, log_r_median):
                 results["results_z"][c][i] = 0
                 results["results_w"][c][i] = 0
             if results["results_r"][c][i] != 0:
-                results["results_r"][c][i] = results["results_r"][c][i] - log_r_median
+                results["results_r"][c][i] = (
+                    results["results_r"][c][i] - log_r_median
+                )
 
 
 """
@@ -228,7 +239,10 @@ def _import_bed(rem_input):
         if chr not in bed.keys():
             bed[chr] = []
         bed[chr].append(
-            [int(int(s) / rem_input["binsize"]), int(int(e) / rem_input["binsize"]) + 1]
+            [
+                int(int(s) / rem_input["binsize"]),
+                int(int(e) / rem_input["binsize"]) + 1,
+            ]
         )
     return bed
 

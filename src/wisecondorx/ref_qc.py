@@ -93,7 +93,9 @@ def _compute_metrics(ref, suf):
 
     mean_of_means = float(np.mean(mean_d[valid]))
     std_of_means = float(np.std(mean_d[valid]))
-    cutoff_outlier = mean_of_means + OUTLIER_N_SIGMA * float(np.std(mean_d[valid]))
+    cutoff_outlier = mean_of_means + OUTLIER_N_SIGMA * float(
+        np.std(mean_d[valid])
+    )
     n_mean_outlier = int(np.sum(mean_d[valid] >= cutoff_outlier))
     n_low_refs = int(np.sum(n_refs < MINREFBINS))
     outlier_pct = 100.0 * n_mean_outlier / n_valid
@@ -150,7 +152,9 @@ def _legacy_autosomal_prefix_compat_issues(ref):
                 )
             )
 
-        s_autosomal_prefix = np.atleast_1d(ref[mask_key][...])[:s_autosomal_span]
+        s_autosomal_prefix = np.atleast_1d(ref[mask_key][...])[
+            :s_autosomal_span
+        ]
         if s_autosomal_span != a_autosomal_span or not np.array_equal(
             s_autosomal_prefix, a_autosomal_prefix
         ):
@@ -168,7 +172,10 @@ def _verdict_f(m):
     if m["n_low_refs"] > 0:
         return "WARN", f"n_refs<{MINREFBINS} in {m['n_low_refs']} bins"
     if m["std_of_means"] > 10:
-        return "FAIL", f"std(per-bin mean dist) = {m['std_of_means']:.2f} (high)"
+        return (
+            "FAIL",
+            f"std(per-bin mean dist) = {m['std_of_means']:.2f} (high)",
+        )
     if m["std_of_means"] > 2:
         return "WARN", f"std(per-bin mean dist) = {m['std_of_means']:.2f}"
     if m["outlier_pct"] > 1:
@@ -212,7 +219,11 @@ def _verdict_m(m):
                     "WARN",
                     f"usable chrY bins = {usable_pct:.1f}% (<{CHRY_MIN_USABLE_PCT_WARN:.0f}%)",
                 )
-    if cy and cy.get("n_valid", 0) > 0 and np.isfinite(cy.get("mean_of_means", np.nan)):
+    if (
+        cy
+        and cy.get("n_valid", 0) > 0
+        and np.isfinite(cy.get("mean_of_means", np.nan))
+    ):
         ym = cy["mean_of_means"]
         if ym > 100:
             update("FAIL", f"chrY mean distance = {ym:.1f} (very poor chrY)")
@@ -235,10 +246,10 @@ def qc_reference(npz_path: Path):
         logging.error(f"QC check skipped: file not found: {npz}")
         return 2
 
-    if npz.suffix == '.npz':
-        out_json = npz.with_name(npz.stem + '_qc.json')
+    if npz.suffix == ".npz":
+        out_json = npz.with_name(npz.stem + "_qc.json")
     else:
-        out_json = npz.with_name(npz.name + '_qc.json')
+        out_json = npz.with_name(npz.name + "_qc.json")
 
     ref = np.load(npz, encoding="latin1", allow_pickle=True)
     try:
@@ -248,7 +259,9 @@ def qc_reference(npz_path: Path):
 
     suffixes = _get_gender_suffixes(ref)
     if not suffixes:
-        logging.error("QC failed: no bins_per_chr / bins_per_chr.F / bins_per_chr.M in npz")
+        logging.error(
+            "QC failed: no bins_per_chr / bins_per_chr.F / bins_per_chr.M in npz"
+        )
         ref.close()
         return 2
 
@@ -260,12 +273,12 @@ def qc_reference(npz_path: Path):
 
     worst = 0  # 0 pass, 1 warn, 2 fail
     compat_issues = _legacy_autosomal_prefix_compat_issues(ref)
-    
+
     qc_data = {
         "overall_verdict": "PASS",
         "worst_severity": 0,
         "compat_issues": compat_issues,
-        "metrics": {}
+        "metrics": {},
     }
 
     for issue in compat_issues:
@@ -279,9 +292,9 @@ def qc_reference(npz_path: Path):
         if m is None:
             logging.warning(f"[{label}] no indexes/distances — skip")
             continue
-            
+
         qc_data["metrics"][label] = {"n_bins": m.get("n_bins")}
-        
+
         if m.get("n_valid", 0) == 0:
             logging.error(f"[{label}] n_bins={m['n_bins']}, n_valid=0 — FAIL")
             worst = max(worst, 2)
@@ -291,17 +304,19 @@ def qc_reference(npz_path: Path):
 
         verdict_fn = _verdict_m if label == "M" else _verdict_f
         verdict, msg = verdict_fn(m)
-        
-        qc_data["metrics"][label].update({
-            "n_valid": m.get("n_valid", 0),
-            "verdict": verdict,
-            "message": msg,
-            "mean_of_means": m["mean_of_means"],
-            "std_of_means": m["std_of_means"],
-            "n_mean_outlier": m["n_mean_outlier"],
-            "outlier_pct": m["outlier_pct"],
-            "n_low_refs": m["n_low_refs"]
-        })
+
+        qc_data["metrics"][label].update(
+            {
+                "n_valid": m.get("n_valid", 0),
+                "verdict": verdict,
+                "message": msg,
+                "mean_of_means": m["mean_of_means"],
+                "std_of_means": m["std_of_means"],
+                "n_mean_outlier": m["n_mean_outlier"],
+                "outlier_pct": m["outlier_pct"],
+                "n_low_refs": m["n_low_refs"],
+            }
+        )
 
         if verdict == "FAIL":
             worst = max(worst, 2)
