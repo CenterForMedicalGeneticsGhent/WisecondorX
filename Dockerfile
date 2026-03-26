@@ -31,6 +31,3 @@ COPY --from=build /app/.pixi/envs/default /app/.pixi/envs/default
 # Copy the source code as it is installed in editable mode in the environment
 COPY --from=build /app/src /app/src
 COPY --from=build /app/pyproject.toml /app/pyproject.toml
-
-# WisecondorX entry point
-ENTRYPOINT ["wisecondorx"]
