@@ -8,7 +8,7 @@ WORKDIR /app
 # Copy project files
 COPY . .
 
-# Install dependencies into the environment using the lock file
+# Install runtime dependencies into the default environment using the lock file
 RUN pixi install --locked -e default
 
 # Runtime stage: Use a clean Ubuntu base for minimal image size

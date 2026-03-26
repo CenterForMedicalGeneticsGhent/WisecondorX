@@ -7,19 +7,21 @@ on:
     branches: [ main, master ]
 
 jobs:
-  lint-and-test:
+  prek:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: j178/prek-action@v2
 
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
       - name: Setup Pixi
-        uses: prefix-dev/setup-pixi@v0.8.1
+        uses: prefix-dev/setup-pixi@v0.9.4
         with:
-          pixi-version: v0.39.5
+          pixi-version: v0.66.0
           cache: true
-
-      - name: Lint and Fix (prek)
-        run: pixi run hooks
-
-      - name: Test
-        run: PYTHONPATH=. pixi run test
+          environments: test
+      - name: Run tests
+        run: pixi run test

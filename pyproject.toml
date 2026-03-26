@@ -61,7 +61,7 @@ ignore = ["E266", "E501", "C901"]
 # --- Pixi configuration ---------------------------------------------------
 [tool.pixi.workspace]
 channels = ["conda-forge", "bioconda"]
-platforms = ["linux-64", "osx-arm64", "osx-64"]
+platforms = ["linux-64", "osx-arm64"]
 
 [tool.pixi.dependencies]
 python = ">=3.10"
@@ -78,18 +78,19 @@ bioconductor-dnacopy = ">=1.76"
 [tool.pixi.pypi-dependencies]
 wisecondorx = { path = ".", editable = true }
 
-[tool.pixi.feature.dev.dependencies]
-prek = "*"
-ruff = "*"
+[tool.pixi.feature.test.dependencies]
 pytest = "*"
 
+[tool.pixi.feature.lint.dependencies]
+prek = "*"
+ruff = "*"
+
 [tool.pixi.environments]
-default = { features = ["dev"], solve-group = "default" }
+default = { solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
 
 [tool.pixi.tasks]
-lint = "ruff check src/"
-format = "ruff format src/"
-test = "pytest tests/"
-fix = "ruff check --fix src/"
-hooks = "prek run --all-files"
+lint = { cmd = "ruff check src/"}
+test = { cmd = "PYTHONPATH=. pytest tests/", default-environment = "test" }
+format = { cmd = "ruff format src/"}
 docker-build = "docker build -t wisecondorx ."
