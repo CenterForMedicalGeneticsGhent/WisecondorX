@@ -49,4 +49,3 @@ def make_ref_arrays(bins_per_chr, refsize=3):
         "distances": distances,
         "null_ratios": null_ratios,
     }
-

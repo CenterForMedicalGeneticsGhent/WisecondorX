@@ -37,7 +37,7 @@ dependencies = [
 testing = [
     "pytest",
     "ruff",
-    "pre-commit"
+    "prek"
 ]
 
 [project.scripts]
