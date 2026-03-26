@@ -80,8 +80,6 @@ wisecondorx = { path = ".", editable = true }
 
 [tool.pixi.feature.test.dependencies]
 pytest = "*"
-
-[tool.pixi.feature.lint.dependencies]
 prek = "*"
 ruff = "*"
 
