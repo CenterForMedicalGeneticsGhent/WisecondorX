@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: v0.39.5
+          cache: true
+
+      - name: Lint and Fix (prek)
+        run: pixi run hooks
+
+      - name: Check for uncommitted changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "Changes detected after running linting hooks. Please run 'pixi run hooks' locally and commit the changes."
+            git status
+            git diff
+            exit 1
+          fi
+
+      - name: Test
+        run: PYTHONPATH=. pixi run test
