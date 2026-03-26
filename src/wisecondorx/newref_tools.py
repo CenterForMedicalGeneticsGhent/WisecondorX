@@ -150,7 +150,6 @@ def train_pca(ref_data, pcacomp=5):
     t_data = ref_data.T
     pca = PCA(n_components=pcacomp)
     pca.fit(t_data)
-    PCA(copy=True, whiten=False)
     transformed = pca.transform(t_data)
     inversed = pca.inverse_transform(transformed)
     corrected = t_data / inversed

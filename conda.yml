@@ -3,13 +3,13 @@ channels:
   - bioconda
 dependencies:
   - setuptools
-  - pandas
+  - pandas >=3.0,<4.0
   - python >=3.10
-  - pysam ==0.22
-  - scipy ==1.13
-  - scikit-learn ==1.4
-  - numpy ==1.26
-  - r-jsonlite ==1.8.8
+  - pysam ==0.23.1
+  - scipy ==1.17.1
+  - scikit-learn ==1.8.0
+  - numpy ==2.4.3
+  - r-jsonlite >=2.0.0
   - r-png
-  - bioconductor-dnacopy ==1.76
-  - matplotlib-base ==3.8.4
+  - bioconductor-dnacopy ==1.84.0
+  - matplotlib-base >=3.10

@@ -250,11 +250,11 @@ pixi run hooks
 - R Bioconductor packages
   - DNAcopy (v1.76.0)
 - Python (>= 3.10) libraries
-  - scipy (v1.13.0)
-  - scikit-learn (v1.4.2)
-  - pysam (v0.22.0)
-  - numpy (v1.26.4)
-  - matplotlib (v3.8.4)
-  - pandas (2.2.2)
+  - scipy (v1.17.1)
+  - scikit-learn (v1.8.0)
+  - pysam (v0.23.3)
+  - numpy (v2.4.3)
+  - matplotlib (v3.10.8)
+  - pandas (v3.0.1)
 
 And of course, other versions are very likely to work as well.

@@ -100,9 +100,9 @@ def _generate_regions_bed(rem_input, results):
         ]
 
         for region in regions:
-            assert (
-                len(region) >= 4
-            ), "Regions file must have at least 4 columns: chr, start, end, name"
+            assert len(region) >= 4, (
+                "Regions file must have at least 4 columns: chr, start, end, name"
+            )
             chr_name, start, end, name = (
                 region[0],
                 region[1],

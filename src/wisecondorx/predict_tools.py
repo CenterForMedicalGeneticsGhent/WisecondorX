@@ -4,7 +4,6 @@ import os
 
 import numpy as np
 from scipy.stats import norm
-from sklearn.decomposition import PCA
 
 from wisecondorx.overall_tools import exec_R, get_z_score
 
@@ -57,14 +56,13 @@ Project test sample to PCA space.
 
 
 def project_pc(sample_data, ref_file, ap):
-    pca = PCA(n_components=ref_file["pca_components{}".format(ap)].shape[0])
-    pca.components_ = ref_file["pca_components{}".format(ap)]
-    pca.mean_ = ref_file["pca_mean{}".format(ap)]
+    components = ref_file["pca_components{}".format(ap)]
+    mean = ref_file["pca_mean{}".format(ap)]
 
-    transform = pca.transform(np.array([sample_data]))
+    centered_data = sample_data - mean
+    transform = np.dot(centered_data, components.T)
 
-    reconstructed = np.dot(transform, pca.components_) + pca.mean_
-    reconstructed = reconstructed[0]
+    reconstructed = np.dot(transform, components) + mean
     return sample_data / reconstructed
 
 
