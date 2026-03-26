@@ -14,10 +14,7 @@ RUN pixi install --locked -e default
 # Runtime stage: Use a clean Ubuntu base for minimal image size
 FROM ubuntu:24.04
 
-# Install basic libraries required for R and scientific packages
-# libgomp1 is commonly required by OpenMP-enabled scientific libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 \
     procps \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
