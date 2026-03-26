@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  prek:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run prek checks
+        uses: j178/prek-action@v2
+      - name: Ensure no changes were made (Check-only)
+        # Fails the job if any hook modified files (keeping working tree clean)
+        run: git diff --exit-code
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@v0.9.4
+        with:
+          pixi-version: v0.66.0
+          cache: true
+          environments: test
+      - name: Run tests
+        run: pixi run test

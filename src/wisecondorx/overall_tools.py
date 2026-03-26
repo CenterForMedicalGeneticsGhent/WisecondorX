@@ -20,7 +20,12 @@ def scale_sample(sample, from_size, to_size):
     if not to_size or from_size == to_size:
         return sample
 
-    if to_size == 0 or from_size == 0 or to_size < from_size or to_size % from_size > 0:
+    if (
+        to_size == 0
+        or from_size == 0
+        or to_size < from_size
+        or to_size % from_size > 0
+    ):
         logging.critical(
             "Impossible binsize scaling requested: {} to {}".format(
                 int(from_size), int(to_size)
@@ -35,7 +40,9 @@ def scale_sample(sample, from_size, to_size):
         new_len = int(np.ceil(len(chr_data) / float(scale)))
         scaled_chr = np.zeros(new_len, dtype=np.int32)
         for i in range(new_len):
-            scaled_chr[i] = np.sum(chr_data[int(i * scale) : int(i * scale + scale)])
+            scaled_chr[i] = np.sum(
+                chr_data[int(i * scale) : int(i * scale + scale)]
+            )
             return_sample[chr_name] = scaled_chr
     return return_sample
 
@@ -105,9 +112,13 @@ def get_z_score(results_c, results):
                 if not np.isfinite(segment_nr[i][ii]):
                     segment_nr[i][ii] = np.nan
         segment_w = results_w[segment[0]][segment[1] : segment[2]]
-        segment_w = [segment_w[i] for i in range(len(segment_w)) if segment_rr[i] != 0]
+        segment_w = [
+            segment_w[i] for i in range(len(segment_w)) if segment_rr[i] != 0
+        ]
         null_segments = [
-            np.ma.average(np.ma.masked_array(x, pd.isnull(x)), weights=segment_w)
+            np.ma.average(
+                np.ma.masked_array(x, pd.isnull(x)), weights=segment_w
+            )
             for x in np.transpose(segment_nr)
         ]
         null_mean = np.ma.mean([x for x in null_segments if np.isfinite(x)])

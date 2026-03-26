@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish-package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@v0.9.4
+        with:
+          pixi-version: v0.66.0
+          cache: true
+          environments: default
+
+      - name: Build package
+        run: pixi run python -m pip install build && pixi run python -m build
+
+      - name: Generate Checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+
+      - name: Upload to GitHub Packages
+        run: |
+          pixi run python -m pip install twine
+          TWINE_USERNAME=${{ github.actor }} \
+          TWINE_PASSWORD=${{ secrets.GITHUB_TOKEN }} \
+          TWINE_REPOSITORY_URL=https://pypi.pkg.github.com/${{ github.repository }} \
+          pixi run twine upload --skip-existing dist/*
+        continue-on-error: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          generate_release_notes: true
+
+  publish-docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64

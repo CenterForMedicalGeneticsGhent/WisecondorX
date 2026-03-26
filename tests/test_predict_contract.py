@@ -72,9 +72,10 @@ class TestPredictContract(unittest.TestCase):
 
         inflated = inflate_results(appended_results, rem_input)
         self.assertEqual(len(inflated), len(rem_input["mask"]))
-        self.assertEqual(sum(x != 0 for x in inflated), int(np.sum(rem_input["mask"])))
+        self.assertEqual(
+            sum(x != 0 for x in inflated), int(np.sum(rem_input["mask"]))
+        )
 
 
 if __name__ == "__main__":
     unittest.main()
-

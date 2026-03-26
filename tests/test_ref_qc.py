@@ -2,7 +2,10 @@ import unittest
 
 import numpy as np
 
-from wisecondorx.ref_qc import _legacy_autosomal_prefix_compat_issues, _verdict_m
+from wisecondorx.ref_qc import (
+    _legacy_autosomal_prefix_compat_issues,
+    _verdict_m,
+)
 
 
 class TestRefQc(unittest.TestCase):
@@ -44,7 +47,9 @@ class TestRefQc(unittest.TestCase):
             "masked_bins_per_chr_cum": np.arange(1, 23, dtype=int),
             "mask": np.array([True] * 22, dtype=bool),
             "bins_per_chr.F": np.array([1] * 23, dtype=int),
-            "masked_bins_per_chr_cum.F": np.array(list(range(1, 23)) + [23], dtype=int),
+            "masked_bins_per_chr_cum.F": np.array(
+                list(range(1, 23)) + [23], dtype=int
+            ),
             "mask.F": np.array([True] * 21 + [False, True], dtype=bool),
         }
         issues = _legacy_autosomal_prefix_compat_issues(ref)
@@ -56,7 +61,9 @@ class TestRefQc(unittest.TestCase):
             "masked_bins_per_chr_cum": np.arange(1, 23, dtype=int),
             "mask": np.array([True] * 22, dtype=bool),
             "bins_per_chr.F": np.array([1] * 23, dtype=int),
-            "masked_bins_per_chr_cum.F": np.array(list(range(1, 23)) + [23], dtype=int),
+            "masked_bins_per_chr_cum.F": np.array(
+                list(range(1, 23)) + [23], dtype=int
+            ),
             "mask.F": np.array([True] * 23, dtype=bool),
         }
         issues = _legacy_autosomal_prefix_compat_issues(ref)
@@ -65,4 +72,3 @@ class TestRefQc(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

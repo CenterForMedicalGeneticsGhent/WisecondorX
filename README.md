@@ -22,22 +22,33 @@ Note that it is important that **no** read quality filtering is executed prior t
 requires low-quality reads to distinguish informative bins from non-informative ones.
 
 ## WisecondorX
-
 ### Installation
+
+Stable releases can be installed through pixi (recommended for reproducibility), pip, or conda.
+
+#### Pixi (Recommended)
+
+```bash
+git clone https://github.com/CenterForMedicalGeneticsGhent/WisecondorX.git
+cd WisecondorX
+pixi install
+```
+
+#### Pip
 
 Stable releases can be installed through pip install. This option ascertains the latest version is
 downloaded, however, it does not install R [dependencies](#dependencies).
 
 ```bash
-
 pip install -U git+https://github.com/CenterForMedicalGeneticsGhent/WisecondorX
 ```
+
+#### Conda
 
 Alternatively, [Conda](https://conda.io/docs/) additionally installs all necessary [depedencies](#dependencies),
 however, the latest version might not be downloaded.
 
 ```bash
-
 conda install -f -c conda-forge -c bioconda wisecondorx
 ```
 
@@ -182,18 +193,79 @@ This file contains aberrant segments, defined by the [`--beta`](#stage-3-predict
 This file contains some interesting statistics (per chromosome and overall). The definition of the Z-scores matches the one from
 the 'ID_segments.bed'. Particularly interesting for NIPT.
 
+# Development
+
+## Prerequisites
+
+Install [pixi](https://pixi.sh), a fast, cross-platform package manager for reproducible
+development environments:
+
+```bash
+curl -fsSL https://pixi.sh/install.sh | sh
+```
+
+## Getting started
+
+Clone the repository and let pixi create the environment:
+
+```bash
+git clone https://github.com/CenterForMedicalGeneticsGhent/WisecondorX.git
+cd WisecondorX
+pixi install
+```
+
+This installs all conda and PyPI dependencies (including WisecondorX itself in
+editable mode) into an isolated `.pixi/` environment.
+
+## Common tasks
+
+Pixi exposes several convenience tasks defined in `pyproject.toml`:
+
+```bash
+pixi run lint        # Run ruff linter on src/
+pixi run fix         # Run ruff linter with auto-fix
+pixi run format      # Run ruff formatter on src/
+pixi run test        # Run pytest
+pixi run hooks       # Run all prek (pre-commit) hooks
+```
+
+You can also open a shell inside the environment:
+
+```bash
+pixi shell
+```
+
+## Pre-commit hooks (prek)
+
+This project uses [prek](https://github.com/j178/prek) — a fast, Rust-based
+drop-in replacement for pre-commit — to run linting and formatting checks before
+each commit.
+
+To install the git hooks locally:
+
+```bash
+pixi run prek install
+```
+
+After this, `ruff` lint and format checks will run automatically on every
+`git commit`. You can also trigger all hooks manually:
+
+```bash
+pixi run hooks
+```
+
 # Dependencies
 
 - R (v4.3.3) packages
   - jsonlite (v1.8.8)
 - R Bioconductor packages
   - DNAcopy (v1.76.0)
-- Python (> v3.6) libraries
-  - scipy (v1.13.0)
-  - scikit-learn (v1.4.2)
-  - pysam (v0.22.0)
-  - numpy (v1.26.4)
-  - matplotlib (v3.8.4)
-  - pandas (2.2.2)
+- Python (>= 3.10) libraries
+  - scipy (v1.17.1)
+  - scikit-learn (v1.8.0)
+  - pysam (v0.23.3)
+  - numpy (v2.4.3)
+  - matplotlib (v3.10.8)
+  - pandas (v3.0.1)
 
 And of course, other versions are very likely to work as well.
