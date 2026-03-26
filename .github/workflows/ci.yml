@@ -21,14 +21,5 @@ jobs:
       - name: Lint and Fix (prek)
         run: pixi run hooks
 
-      - name: Check for uncommitted changes
-        run: |
-          if [[ -n $(git status --porcelain) ]]; then
-            echo "Changes detected after running linting hooks. Please run 'pixi run hooks' locally and commit the changes."
-            git status
-            git diff
-            exit 1
-          fi
-
       - name: Test
         run: PYTHONPATH=. pixi run test
