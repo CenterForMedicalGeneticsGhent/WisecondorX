@@ -8,16 +8,13 @@ WORKDIR /app
 # Copy project files
 COPY . .
 
-# Install dependencies into the environment using the lock file
+# Install runtime dependencies into the default environment using the lock file
 RUN pixi install --locked -e default
 
 # Runtime stage: Use a clean Ubuntu base for minimal image size
 FROM ubuntu:24.04
 
-# Install basic libraries required for R and scientific packages
-# libgomp1 is commonly required by OpenMP-enabled scientific libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 \
     procps \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -31,6 +28,3 @@ COPY --from=build /app/.pixi/envs/default /app/.pixi/envs/default
 # Copy the source code as it is installed in editable mode in the environment
 COPY --from=build /app/src /app/src
 COPY --from=build /app/pyproject.toml /app/pyproject.toml
-
-# WisecondorX entry point
-ENTRYPOINT ["wisecondorx"]

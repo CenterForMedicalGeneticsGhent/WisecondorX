@@ -7,28 +7,25 @@ on:
     branches: [ main, master ]
 
 jobs:
-  lint-and-test:
+  prek:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - name: Run prek checks
+        uses: j178/prek-action@v2
+      - name: Ensure no changes were made (Check-only)
+        # Fails the job if any hook modified files (keeping working tree clean)
+        run: git diff --exit-code
 
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
       - name: Setup Pixi
-        uses: prefix-dev/setup-pixi@v0.8.1
+        uses: prefix-dev/setup-pixi@v0.9.4
         with:
-          pixi-version: v0.39.5
+          pixi-version: v0.66.0
           cache: true
-
-      - name: Lint and Fix (prek)
-        run: pixi run hooks
-
-      - name: Check for uncommitted changes
-        run: |
-          if [[ -n $(git status --porcelain) ]]; then
-            echo "Changes detected after running linting hooks. Please run 'pixi run hooks' locally and commit the changes."
-            git status
-            git diff
-            exit 1
-          fi
-
-      - name: Test
-        run: PYTHONPATH=. pixi run test
+          environments: test
+      - name: Run tests
+        run: pixi run test
