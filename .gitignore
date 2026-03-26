@@ -2,6 +2,7 @@
 .Rhistory
 .git
 .idea/
+.pixi/
 .venv*
 __pycache__
 wisecondorx.egg-info/

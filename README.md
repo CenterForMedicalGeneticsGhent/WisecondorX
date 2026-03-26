@@ -182,13 +182,74 @@ This file contains aberrant segments, defined by the [`--beta`](#stage-3-predict
 This file contains some interesting statistics (per chromosome and overall). The definition of the Z-scores matches the one from
 the 'ID_segments.bed'. Particularly interesting for NIPT.
 
+# Development
+
+## Prerequisites
+
+Install [pixi](https://pixi.sh), a fast, cross-platform package manager for reproducible
+development environments:
+
+```bash
+curl -fsSL https://pixi.sh/install.sh | sh
+```
+
+## Getting started
+
+Clone the repository and let pixi create the environment:
+
+```bash
+git clone https://github.com/CenterForMedicalGeneticsGhent/WisecondorX.git
+cd WisecondorX
+pixi install
+```
+
+This installs all conda and PyPI dependencies (including WisecondorX itself in
+editable mode) into an isolated `.pixi/` environment.
+
+## Common tasks
+
+Pixi exposes several convenience tasks defined in `pyproject.toml`:
+
+```bash
+pixi run lint        # Run ruff linter on src/
+pixi run fix         # Run ruff linter with auto-fix
+pixi run format      # Run ruff formatter on src/
+pixi run test        # Run pytest
+pixi run hooks       # Run all prek (pre-commit) hooks
+```
+
+You can also open a shell inside the environment:
+
+```bash
+pixi shell
+```
+
+## Pre-commit hooks (prek)
+
+This project uses [prek](https://github.com/j178/prek) — a fast, Rust-based
+drop-in replacement for pre-commit — to run linting and formatting checks before
+each commit.
+
+To install the git hooks locally:
+
+```bash
+pixi run prek install
+```
+
+After this, `ruff` lint and format checks will run automatically on every
+`git commit`. You can also trigger all hooks manually:
+
+```bash
+pixi run hooks
+```
+
 # Dependencies
 
 - R (v4.3.3) packages
   - jsonlite (v1.8.8)
 - R Bioconductor packages
   - DNAcopy (v1.76.0)
-- Python (> v3.6) libraries
+- Python (>= 3.10) libraries
   - scipy (v1.13.0)
   - scikit-learn (v1.4.2)
   - pysam (v0.22.0)

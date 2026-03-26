@@ -57,3 +57,38 @@ target-version = "py310"
 
 [tool.ruff.lint]
 ignore = ["E266", "E501", "C901"]
+
+# --- Pixi configuration ---------------------------------------------------
+[tool.pixi.workspace]
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64", "osx-arm64", "osx-64"]
+
+[tool.pixi.dependencies]
+python = ">=3.10"
+pysam = "0.22.*"
+scipy = "1.13.*"
+scikit-learn = "1.4.*"
+numpy = "1.26.*"
+pandas = "*"
+matplotlib-base = "3.8.*"
+r-jsonlite = "1.8.*"
+r-png = "*"
+bioconductor-dnacopy = ">=1.76"
+
+[tool.pixi.pypi-dependencies]
+wisecondorx = { path = ".", editable = true }
+
+[tool.pixi.feature.dev.dependencies]
+prek = "*"
+ruff = "*"
+pytest = "*"
+
+[tool.pixi.environments]
+default = { features = ["dev"], solve-group = "default" }
+
+[tool.pixi.tasks]
+lint = "ruff check src/"
+format = "ruff format src/"
+test = "pytest tests/"
+fix = "ruff check --fix src/"
+hooks = "prek run --all-files"
