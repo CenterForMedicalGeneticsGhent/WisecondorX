@@ -9,11 +9,18 @@ import math
 
 import numpy as np
 import pandas as pd
+from enum import Enum
 
 """
 Scales the bin size of a sample.npz to the one  
 requested for the reference
 """
+
+
+class Sex(Enum):
+    MALE = "M"
+    FEMALE = "F"
+    AUTOSOMAL = "A"
 
 
 def scale_sample(sample, from_size, to_size):
