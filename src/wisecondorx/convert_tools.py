@@ -22,7 +22,9 @@ def wcx_convert(
         help="Fasta reference to be used during cram conversion",
     ),
     binsize: int = typer.Option(5000, "--binsize", help="Bin size (bp)"),
-    rmdup: bool = typer.Option(True, "--rmdup", help="Remove duplicates"),
+    normdup: bool = typer.Option(
+        False, "--normdup", help="Do not remove duplicates"
+    ),
 ) -> None:
     """
     Convert and filter aligned reads to .npz format.
@@ -95,7 +97,7 @@ def wcx_convert(
                     reads_pairf += 1
                     continue
                 if (
-                    rmdup
+                    not normdup
                     and larp == read.pos
                     and larp2 == read.next_reference_start
                 ):
@@ -111,7 +113,7 @@ def wcx_convert(
                 reads_seen += 1
                 larp = read.pos
             else:
-                if rmdup and larp == read.pos:
+                if not normdup and larp == read.pos:
                     reads_rmdup += 1
                 else:
                     if read.mapping_quality >= 1:
