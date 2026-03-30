@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 
-import argparse
 import logging
 import os
 import sys
 import warnings
-
+from typing import Annotated
 import numpy as np
-
-from wisecondorx.convert_tools import convert_reads
+import typer
+import argparse
+from pathlib import Path
+from wisecondorx.convert_tools import wcx_convert
 from wisecondorx.newref_control import (
     tool_newref_prep,
     tool_newref_main,
     tool_newref_merge,
 )
 from wisecondorx.newref_tools import train_gender_model, get_mask
-from wisecondorx.overall_tools import gender_correct, scale_sample
+from wisecondorx.overall_tools import gender_correct, scale_sample, Sex
 from wisecondorx.predict_control import normalize, get_post_processed_result
 from wisecondorx.predict_output import generate_output_tables
 from wisecondorx.plotter import write_plots
@@ -26,6 +27,18 @@ from wisecondorx.predict_tools import (
     predict_gender,
 )
 from wisecondorx.ref_qc import qc_reference
+
+from wisecondorx import __version__
+
+VERSION: str = __version__
+
+
+def setup_logging(loglevel: str = "INFO") -> None:
+    logging.basicConfig(
+        format="[%(levelname)s - %(asctime)s]: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        level=getattr(logging, loglevel.upper(), None),
+    )
 
 
 def _build_branch_masks(samples, genders, is_nipt):
@@ -58,19 +71,54 @@ def _build_branch_masks(samples, genders, is_nipt):
     return bins_per_chr.tolist(), mask_a, mask_f_sex, mask_m_sex
 
 
-def tool_convert(args):
-    logging.info("Starting conversion")
-
-    sample, qual_info = convert_reads(args)
-    np.savez_compressed(
-        args.outfile, binsize=args.binsize, sample=sample, quality=qual_info
-    )
-
-    logging.info("Finished conversion")
-
-
-def tool_newref(args):
+def wcx_newref(
+    infiles: list[Path] = typer.Argument(
+        ...,
+        help="Path to all reference data files (e.g. path/to/reference/*.npz)",
+    ),
+    outfile: Path = typer.Argument(
+        ...,
+        help="Path and filename for the reference output (e.g. path/to/myref.npz)",
+    ),
+    nipt: bool = typer.Option(False, "--nipt", help="Use flag for NIPT"),
+    yfrac: Annotated[
+        float,
+        typer.Option(
+            "--yfrac",
+            min=0.0,
+            max=1.0,
+            help="Use to manually set the Y read fraction cutoff, which defines sex",
+        ),
+    ] = None,
+    plotyfrac: Path = typer.Option(
+        None,
+        "--plotyfrac",
+        help="Path to yfrac .png plot for optimization; software will stop after plotting",
+    ),
+    refsize: int = typer.Option(
+        300, "--refsize", help="Amount of reference locations per target"
+    ),
+    binsize: int = typer.Option(
+        5000, "--binsize", help="Size of target bins in base pairs"
+    ),
+    cpus: int = typer.Option(
+        1, "--cpus", help="Use multiple cores to find reference bins"
+    ),
+) -> None:
+    """
+    Create a new reference using healthy reference samples.
+    """
     logging.info("Creating new reference")
+
+    args = argparse.Namespace()
+    args.infiles = infiles
+    args.outfile = outfile
+    args.nipt = nipt
+    args.yfrac = yfrac
+    args.plotyfrac = plotyfrac
+    args.refsize = refsize
+    args.binsize = binsize
+    args.cpus = cpus
 
     if args.yfrac is not None:
         if args.yfrac < 0 or args.yfrac > 1:
@@ -178,8 +226,106 @@ def tool_newref(args):
     logging.info("Finished creating reference")
 
 
-def tool_test(args):
+def wcx_predict(
+    infile: Path = typer.Argument(..., help=".npz input file"),
+    reference: Path = typer.Argument(
+        ..., help="Reference .npz, as previously created with newref"
+    ),
+    outid: str = typer.Argument(
+        ...,
+        help="Basename (w/o extension) of output files (paths are allowed, e.g. path/to/ID_1)",
+    ),
+    minrefbins: int = typer.Option(
+        150,
+        "--minrefbins",
+        help="Minimum amount of sensible reference bins per target bin.",
+    ),
+    maskrepeats: int = typer.Option(
+        5,
+        "--maskrepeats",
+        help="Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.",
+    ),
+    alpha: Annotated[
+        float,
+        typer.Option(
+            min=0.0,
+            max=1.0,
+            help="p-value cut-off for calling a CBS breakpoint.",
+        ),
+    ] = 1e-4,
+    zscore: Annotated[
+        float,
+        typer.Option(help="z-score cut-off for aberration calling.", min=0.0),
+    ] = 5.0,
+    beta: Annotated[
+        float,
+        typer.Option(
+            min=0.0,
+            max=1.0,
+            help="When beta is given, --zscore is ignored and a ratio cut-off is used to call aberrations.",
+        ),
+    ] = None,
+    blacklist: Path = typer.Option(
+        None,
+        "--blacklist",
+        help="Blacklist that masks regions in output, structure of header-less file: chr...(/t)startpos(/t)endpos(/n)",
+    ),
+    gender: Sex = typer.Option(
+        None,
+        "--gender",
+        help="Force WisecondorX to analyze this case as a male (M) or a female (F)",
+    ),
+    ylim: str = typer.Option(
+        "def", "--ylim", help="y-axis limits for plotting. e.g. [-2,2]"
+    ),
+    bed: bool = typer.Option(
+        True,
+        "--bed",
+        help="Outputs tab-delimited .bed files, containing the most important information",
+    ),
+    plot: bool = typer.Option(False, "--plot", help="Output .png plots"),
+    cairo: bool = typer.Option(
+        True,
+        "--cairo",
+        help="Use cairo for plotting",
+    ),
+    add_plot_title: bool = typer.Option(
+        False,
+        "--add-plot-title",
+        help="Add the output name as plot title",
+    ),
+    seed: int = typer.Option(
+        42, "--seed", help="Seed for segmentation algorithm"
+    ),
+    regions: Path = typer.Option(
+        None,
+        "--regions",
+        help="bed file with regions to be marked on the output plot",
+    ),
+) -> None:
+    """
+    Find copy number aberrations.
+    """
     logging.info("Starting CNA prediction")
+
+    args = argparse.Namespace()
+    args.infile = infile
+    args.reference = reference
+    args.outid = outid
+    args.minrefbins = minrefbins
+    args.maskrepeats = maskrepeats
+    args.alpha = alpha
+    args.zscore = zscore
+    args.beta = beta
+    args.blacklist = blacklist
+    args.gender = gender
+    args.ylim = ylim
+    args.bed = bed
+    args.plot = plot
+    args.cairo = cairo
+    args.add_plot_title = add_plot_title
+    args.seed = seed
+    args.regions = regions
 
     if not args.bed and not args.plot:
         logging.critical(
@@ -358,9 +504,18 @@ def tool_test(args):
     logging.info("Finished prediction")
 
 
-def output_gender(args):
-    ref_file = np.load(args.reference, encoding="latin1", allow_pickle=True)
-    sample_file = np.load(args.infile, encoding="latin1", allow_pickle=True)
+def wcx_gender(
+    infile: Path = typer.Argument(..., help=".npz input file"),
+    reference: Path = typer.Argument(
+        ..., help="Reference .npz, as previously created with newref"
+    ),
+) -> None:
+    """
+    Returns the sex of a .npz resulting from convert, based on a Gaussian mixture model trained during the newref phase.
+    """
+
+    ref_file = np.load(reference, encoding="latin1", allow_pickle=True)
+    sample_file = np.load(infile, encoding="latin1", allow_pickle=True)
     gender = predict_gender(
         sample_file["sample"].item(), ref_file["trained_cutoff"]
     )
@@ -370,216 +525,28 @@ def output_gender(args):
         print("female")
 
 
-def main():
-    warnings.filterwarnings("ignore")
+app = typer.Typer(
+    name="wisecondorx",
+    help="WisecondorX: Copy Number Aberration detection from Whole Genome Sequencing data.",
+    add_completion=False,
+)
+app.command(name="convert")(wcx_convert)
+app.command(name="newref")(wcx_newref)
+app.command(name="gender")(wcx_gender)
+app.command(name="predict")(wcx_predict)
 
-    parser = argparse.ArgumentParser(description="WisecondorX")
-    parser.add_argument(
+
+@app.callback()
+def main_callback(
+    loglevel: str = typer.Option(
+        "INFO",
         "--loglevel",
-        type=str,
-        default="INFO",
-        choices=["info", "warning", "debug", "error", "critical"],
-    )
-    subparsers = parser.add_subparsers()
-
-    parser_convert = subparsers.add_parser(
-        "convert",
-        description="Convert and filter a aligned reads to .npz",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser_convert.add_argument(
-        "infile", type=str, help="aligned reads input for conversion"
-    )
-    parser_convert.add_argument("outfile", type=str, help="Output .npz file")
-    parser_convert.add_argument(
-        "-r",
-        "--reference",
-        type=str,
-        help="Fasta reference to be used during cram conversion",
-    )
-    parser_convert.add_argument(
-        "--binsize", type=float, default=5e3, help="Bin size (bp)"
-    )
-    parser_convert.add_argument(
-        "--normdup", action="store_true", help="Do not remove duplicates"
-    )
-    parser_convert.set_defaults(func=tool_convert)
-
-    parser_newref = subparsers.add_parser(
-        "newref",
-        description="Create a new reference using healthy reference samples",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser_newref.add_argument(
-        "infiles",
-        type=str,
-        nargs="+",
-        help="Path to all reference data files (e.g. path/to/reference/*.npz)",
-    )
-    parser_newref.add_argument(
-        "outfile",
-        type=str,
-        help="Path and filename for the reference output (e.g. path/to/myref.npz)",
-    )
-    parser_newref.add_argument(
-        "--nipt",
-        action="store_true",
-        help="Use flag for NIPT (e.g. path/to/reference/*.npz)",
-    )
-    parser_newref.add_argument(
-        "--yfrac",
-        type=float,
-        default=None,
-        help="Use to manually set the y read fraction cutoff, which defines gender",
-    )
-    parser_newref.add_argument(
-        "--plotyfrac",
-        type=str,
-        default=None,
-        help="Path to yfrac .png plot for --yfrac optimization (e.g. path/to/plot.png); software will stop after plotting after which --yfrac can be set manually",
-    )
-    parser_newref.add_argument(
-        "--refsize",
-        type=int,
-        default=300,
-        help="Amount of reference locations per target",
-    )
-    parser_newref.add_argument(
-        "--binsize",
-        type=int,
-        default=1e5,
-        help="Scale samples to this binsize, multiples of existing binsize only",
-    )
-    parser_newref.add_argument(
-        "--cpus",
-        type=int,
-        default=1,
-        help="Use multiple cores to find reference bins",
-    )
-    parser_newref.set_defaults(func=tool_newref)
-
-    parser_gender = subparsers.add_parser(
-        "gender",
-        description="Returns the gender of a .npz resulting from convert, "
-        "based on a Gaussian mixture model trained during the newref phase",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser_gender.add_argument("infile", type=str, help=".npz input file")
-    parser_gender.add_argument(
-        "reference",
-        type=str,
-        help="Reference .npz, as previously created with newref",
-    )
-    parser_gender.set_defaults(func=output_gender)
-
-    parser_test = subparsers.add_parser(
-        "predict",
-        description="Find copy number aberrations",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser_test.add_argument("infile", type=str, help=".npz input file")
-    parser_test.add_argument(
-        "reference",
-        type=str,
-        help="Reference .npz, as previously created with newref",
-    )
-    parser_test.add_argument(
-        "outid",
-        type=str,
-        help="Basename (w/o extension) of output files (paths are allowed, e.g. path/to/ID_1)",
-    )
-    parser_test.add_argument(
-        "--minrefbins",
-        type=int,
-        default=150,
-        help="Minimum amount of sensible reference bins per target bin.",
-    )
-    parser_test.add_argument(
-        "--maskrepeats",
-        type=int,
-        default=5,
-        help="Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.",
-    )
-    parser_test.add_argument(
-        "--alpha",
-        type=float,
-        default=1e-4,
-        help="p-value cut-off for calling a CBS breakpoint.",
-    )
-    parser_test.add_argument(
-        "--zscore",
-        type=float,
-        default=5,
-        help="z-score cut-off for aberration calling.",
-    )
-    parser_test.add_argument(
-        "--beta",
-        type=float,
-        default=None,
-        help="When beta is given, --zscore is ignored and a ratio cut-off is used to call aberrations. Beta is a number between 0 (liberal) and 1 (conservative) and is optimally close to the purity.",
-    )
-    parser_test.add_argument(
-        "--blacklist",
-        type=str,
-        default=None,
-        help="Blacklist that masks regions in output, structure of header-less "
-        "file: chr...(/t)startpos(/t)endpos(/n)",
-    )
-    parser_test.add_argument(
-        "--gender",
-        type=str,
-        choices=["F", "M"],
-        help="Force WisecondorX to analyze this case as a male (M) or a female (F)",
-    )
-    parser_test.add_argument(
-        "--ylim",
-        type=str,
-        default="def",
-        help="y-axis limits for plotting. e.g. [-2,2]",
-    )
-    parser_test.add_argument(
-        "--bed",
-        action="store_true",
-        help="Outputs tab-delimited .bed files, containing the most important information",
-    )
-    parser_test.add_argument(
-        "--plot", action="store_true", help="Outputs .png plots"
-    )
-    parser_test.add_argument(
-        "--cairo",
-        action="store_true",
-        help="Uses cairo bitmap type for plotting. Might be necessary for certain setups.",
-    )
-    parser_test.add_argument(
-        "--add-plot-title",
-        action="store_true",
-        help="Add the output name as plot title",
-    )
-    parser_test.add_argument(
-        "--seed",
-        type=int,
-        default=None,
-        help="Seed for segmentation algorithm",
-    )
-    parser_test.add_argument(
-        "--regions",
-        type=str,
-        default=None,
-        help="List of regions to be marked on the output plot, structure of header-less "
-        "file: chr...(/t)startpos(/t)endpos(/n)name. If not given, no regions will be marked.",
-    )
-    parser_test.set_defaults(func=tool_test)
-
-    args = parser.parse_args(sys.argv[1:])
-
-    logging.basicConfig(
-        format="[%(levelname)s - %(asctime)s]: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        level=getattr(logging, args.loglevel.upper(), None),
-    )
-    logging.debug("args are: {}".format(args))
-    args.func(args)
+        help="Logging level (info, warning, debug, error, critical)",
+    ),
+) -> None:
+    warnings.filterwarnings("ignore")
+    setup_logging(loglevel=loglevel)
 
 
 if __name__ == "__main__":
-    main()
+    app()
