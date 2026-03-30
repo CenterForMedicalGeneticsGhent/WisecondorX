@@ -8,9 +8,10 @@ WisecondorX is a bioinformatics tool for Copy Number Variation (CNV) analysis in
 
 ### Core Stack
 - **Language:** Python 3.10+
-- **Data Science:** NumPy, SciPy, Pandas, Scikit-learn
+- **Data Science:** NumPy, SciPy, Pandas, Scikit-learn, Matplotlib
 - **Bioinformatics:** Pysam
-- **Supporting Logic:** R (specifically for Circular Binary Segmentation (CBS))
+- **CLI:** Typer
+- **Supporting Logic:** R (CBS analysis via `DNAcopy` from Bioconductor, `jsonlite`, `png`)
 - **Environment & Dependency Management:** [Pixi](https://pixi.sh)
 - **Linting & Formatting:** Ruff (Line length: 79)
 - **Testing:** Pytest (using `unittest` style tests)
@@ -20,7 +21,9 @@ WisecondorX is a bioinformatics tool for Copy Number Variation (CNV) analysis in
 ### Pipeline Stages
 1. **Convert:** BAM/CRAM files are converted into binned read counts stored in compressed NumPy (`.npz`) files.
 2. **Newref:** Multiple `.npz` files from control samples are combined to create a reference `.npz` file. This involves PCA and gender modeling.
-3. **Predict:** A test sample `.npz` is compared against a reference `.npz` to detect CNVs.
+3. **Gender:** (Optional) Predicts the sex of a sample based on the reference model.
+4. **Predict:** A test sample `.npz` is compared against a reference `.npz` to detect CNVs using Circular Binary Segmentation (CBS).
+5. **RefQC:** (Supplementary) Quality control for a generated reference.
 
 ### Data Flow & "Contracts"
 The project relies heavily on `.npz` files for intermediate storage. These files have strict "contracts" regarding their keys and data structures.
@@ -29,7 +32,10 @@ The project relies heavily on `.npz` files for intermediate storage. These files
 
 ### CLI Structure
 - `src/wisecondorx/main.py`: The main entry point using `typer` for subcommands.
-- `src/wisecondorx/{convert,newref,predict}.py`: Functions for each pipeline stage.
+- `src/wisecondorx/convert.py`: `convert` subcommand.
+- `src/wisecondorx/newref.py`: `newref` subcommand.
+- `src/wisecondorx/predict.py`: `predict` and `gender` subcommands.
+- `src/wisecondorx/refqc.py`: `refqc` subcommand.
 - `src/wisecondorx/utils.py`: Helper functions used by the pipeline stages.
 - `src/wisecondorx/plotter.py`: Plotting functions for the pipeline stages.
 - `src/wisecondorx/include/`: Contains R script `CBS.R` (specifically for Circular Binary Segmentation (CBS)) invoked via Python's `subprocess`.
