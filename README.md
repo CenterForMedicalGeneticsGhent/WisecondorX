@@ -84,8 +84,6 @@ WisecondorX convert input.bam/cram output.npz [--optional arguments]
 | `--binsize x`                  | Size per bin in bp; the reference bin size should be a multiple of this value. Note that this parameter does not impact the resolution, yet it can be used to optimize processing speed (default: x=5e3) |
 | `--normdup`                    | Use this flag to avoid duplicate removal                                                                                                                                                                 |
 
-&rarr; Bash recipe at `docs/include/pipeline/convert.sh`
-
 ### Stage (2) Create reference
 
 ```bash
@@ -101,8 +99,6 @@ WisecondorX newref reference_input_dir/*.npz reference_output.npz [--optional ar
 | `--yfrac x`                    | Y read fraction cutoff, in order to manually define gender. Setting this to 1 will treat all samples as female                              |
 | `--plotyfrac x`                | plots Y read fraction histogram and Gaussian mixture fit to file x, can help when setting `--yfrac` manually; software quits after plotting |
 | `--cpus x`                     | Number of threads requested (default: x=1)                                                                                                  |
-
-&rarr; Bash recipe at `docs/include/pipeline/newref.sh`
 
 ### Stage (3) Predict copy number alterations
 
@@ -128,8 +124,6 @@ WisecondorX predict test_input.npz reference_input.npz output_id [--optional arg
 | `--seed`| Random seed for segmentation algorithm (default:None)                                                                                                                                                                                  |
 
 <sup>**(\*)** At least one of these output formats should be selected</sup>
-
-&rarr; Bash recipe at `docs/include/pipeline/predict.sh`
 
 ### Additional functionality
 
