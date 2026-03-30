@@ -1,6 +1,5 @@
 # WisecondorX
 
-import bisect
 import logging
 import random
 import copy
@@ -20,16 +19,15 @@ import typer
 from pathlib import Path
 from typing import Annotated
 
-"""
-A Gaussian mixture model is fitted against
-all one-dimensional reference y-fractions.
-Two components are expected: one for males,
-and one for females. The local minimum will
-serve as the cut-off point.
-"""
-
 
 def train_gender_model(args, samples):
+    """
+    A Gaussian mixture model is fitted against
+    all one-dimensional reference y-fractions.
+    Two components are expected: one for males,
+    and one for females. The local minimum will
+    serve as the cut-off point.
+    """
     genders = np.empty(len(samples), dtype="object")
     y_fractions = []
     for sample in samples:
@@ -90,28 +88,27 @@ def train_gender_model(args, samples):
     return genders.tolist(), cut_off
 
 
-"""
-Finds mask (locations of bins without data) in the
-subset 'samples'.
-"""
+def _samples_to_matrix(samples, chrs):
+    """
+    Concatenates samples for the specified chromosomes into a single matrix.
+    """
+    by_chr = []
+    sample_count = len(samples)
+    for chr in chrs:
+        max_len = max([sample[str(chr)].shape[0] for sample in samples])
+        this_chr = np.zeros((max_len, sample_count), dtype=float)
+        for i, sample in enumerate(samples):
+            this_chr[:, i] = sample[str(chr)]
+        by_chr.append(this_chr)
+    return np.concatenate(by_chr, axis=0)
 
 
 def get_mask(samples):
-    by_chr = []
-    bins_per_chr = []
-    sample_count = len(samples)
-
-    for chr in range(1, 25):
-        max_len = max([sample[str(chr)].shape[0] for sample in samples])
-        this_chr = np.zeros((max_len, sample_count), dtype=float)
-        bins_per_chr.append(max_len)
-        i = 0
-        for sample in samples:
-            this_chr[:, i] = sample[str(chr)]
-            i += 1
-        by_chr.append(this_chr)
-    all_data = np.concatenate(by_chr, axis=0)
-
+    """
+    Finds mask (locations of bins without data) in the
+    subset 'samples'.
+    """
+    all_data = _samples_to_matrix(samples, range(1, 25))
     sum_per_sample = np.sum(all_data, 0)
     all_data = all_data / sum_per_sample
 
@@ -121,27 +118,18 @@ def get_mask(samples):
     median_cov = np.median(sum_per_bin[sum_per_bin > 0])
     mask = sum_per_bin > (0.05 * median_cov)
 
-    return mask, bins_per_chr
-
-
-"""
-Normalizes samples for read depth and applies mask.
-"""
+    return mask, [
+        sample[str(chr)].shape[0]
+        for chr in range(1, 25)
+        for sample in [samples[0]]
+    ]
 
 
 def normalize_and_mask(samples, chrs, mask):
-    by_chr = []
-    sample_count = len(samples)
-
-    for chr in chrs:
-        max_len = max([sample[str(chr)].shape[0] for sample in samples])
-        this_chr = np.zeros((max_len, sample_count), dtype=float)
-        i = 0
-        for sample in samples:
-            this_chr[:, i] = sample[str(chr)]
-            i += 1
-        by_chr.append(this_chr)
-    all_data = np.concatenate(by_chr, axis=0)
+    """
+    Normalizes samples for read depth and applies mask.
+    """
+    all_data = _samples_to_matrix(samples, chrs)
 
     sum_per_sample = np.sum(all_data, 0)
     all_data = all_data / sum_per_sample
@@ -151,13 +139,11 @@ def normalize_and_mask(samples, chrs, mask):
     return masked_data
 
 
-"""
-Executes PCA. Rotations are saved which enable
-between sample normalization in the test phase.
-"""
-
-
 def train_pca(ref_data, pcacomp=5):
+    """
+    Executes PCA. Rotations are saved which enable
+    between sample normalization in the test phase.
+    """
     t_data = ref_data.T
     pca = PCA(n_components=pcacomp)
     pca.fit(t_data)
@@ -168,11 +154,6 @@ def train_pca(ref_data, pcacomp=5):
     return corrected.T, pca
 
 
-"""
-Calculates within-sample reference.
-"""
-
-
 def get_reference(
     pca_corrected_data,
     masked_bins_per_chr,
@@ -181,6 +162,9 @@ def get_reference(
     part,
     split_parts,
 ):
+    """
+    Calculates within-sample reference.
+    """
     big_indexes = []
     big_distances = []
 
@@ -270,36 +254,21 @@ def _get_part(partnum, outof, bincount):
     return start_bin, end_bin
 
 
-"""
-Calculates within-sample reference for a particular chromosome.
-"""
-
-
 def get_ref_for_bins(ref_size, start, end, pca_corrected_data, chr_data):
-    find_pos = bisect.bisect
+    """
+    Calculates within-sample reference for a particular chromosome.
+    """
     ref_indexes = np.zeros((end - start, ref_size), dtype=np.int32)
     ref_distances = np.ones((end - start, ref_size))
     for this_bin in range(start, end):
-        this_mask = np.sum(
-            np.power(chr_data - pca_corrected_data[this_bin, :], 2), 1
+        distances = np.sum(
+            np.power(chr_data - pca_corrected_data[this_bin, :], 2), axis=1
         )
-        this_indexes = [-1 for i in range(ref_size)]
-        this_distances = [1e10 for i in range(ref_size)]
-        remove_index = this_indexes.pop
-        remove_dist = this_distances.pop
-        insert_index = this_indexes.insert
-        insert_dist = this_distances.insert
-        cur_max = 1e10
-        for i, binVal in enumerate(this_mask):
-            if binVal < cur_max:
-                pos = find_pos(this_distances, binVal)
-                remove_index(-1)
-                remove_dist(-1)
-                insert_index(pos, i)
-                insert_dist(pos, binVal)
-                cur_max = this_distances[-1]
-        ref_indexes[this_bin - start, :] = this_indexes
-        ref_distances[this_bin - start, :] = this_distances
+        # Use argpartition for O(n) top-k selection, then sort the result
+        idx = np.argpartition(distances, ref_size)[:ref_size]
+        idx = idx[np.argsort(distances[idx])]
+        ref_indexes[this_bin - start, :] = idx
+        ref_distances[this_bin - start, :] = distances[idx]
     return ref_indexes, ref_distances
 
 
@@ -681,24 +650,23 @@ def tool_newref_post(args, cpus):
     )
 
 
-def force_remove(file_id):
+def force_remove(file_id, max_attempts=5):
     """
-    Tries to remove text file, when it is busy, until becomes successful.
-    This function, prevents OSError: [Errno 26] Text file busy...
+    Tries to remove a file, retrying if it is busy.
     """
-    attemp = 1
-    while True:
+    attempt = 1
+    while attempt <= max_attempts:
         try:
             os.remove(file_id)
-            break
+            return
         except Exception:
-            print(
-                "Attemp #{}: Cannot remove {}, because it is busy, trying again...".format(
-                    attemp, file_id
-                )
+            logging.warning(
+                f"Attempt #{attempt}: Cannot remove {file_id}, "
+                "it might be busy. Retrying in 5 seconds..."
             )
-            attemp = attemp + 1
+            attempt += 1
             time.sleep(5)
+    logging.error(f"Failed to remove {file_id} after {max_attempts} attempts.")
 
 
 def tool_newref_merge(args, outfiles, trained_cutoff):
