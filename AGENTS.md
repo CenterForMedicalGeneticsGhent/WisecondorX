@@ -10,7 +10,7 @@ WisecondorX is a bioinformatics tool for Copy Number Variation (CNV) analysis in
 - **Language:** Python 3.10+
 - **Data Science:** NumPy, SciPy, Pandas, Scikit-learn
 - **Bioinformatics:** Pysam
-- **Supporting Logic:** R (specifically for Circular Binary Segmentation (CBS) and plotting)
+- **Supporting Logic:** R (specifically for Circular Binary Segmentation (CBS))
 - **Environment & Dependency Management:** [Pixi](https://pixi.sh)
 - **Linting & Formatting:** Ruff (Line length: 79)
 - **Testing:** Pytest (using `unittest` style tests)
@@ -31,7 +31,7 @@ The project relies heavily on `.npz` files for intermediate storage. These files
 - `src/wisecondorx/main.py`: The main entry point using `argparse` for subcommands.
 - `*_control.py`: Higher-level coordination of pipeline stages.
 - `*_tools.py`: Lower-level computational logic.
-- `src/wisecondorx/include/`: Contains R scripts (`CBS.R`, `plotter.R`) invoked via Python's `subprocess`.
+- `src/wisecondorx/include/`: Contains R script `CBS.R` (specifically for Circular Binary Segmentation (CBS)) invoked via Python's `subprocess`.
 
 ## Development Workflow
 

@@ -18,7 +18,8 @@ from wisecondorx.newref_control import (
 from wisecondorx.newref_tools import train_gender_model, get_mask
 from wisecondorx.overall_tools import gender_correct, scale_sample, Sex
 from wisecondorx.predict_control import normalize, get_post_processed_result
-from wisecondorx.predict_output import generate_output_tables, exec_write_plots
+from wisecondorx.predict_output import generate_output_tables
+from wisecondorx.plotter import write_plots
 from wisecondorx.predict_tools import (
     log_trans,
     exec_cbs,
@@ -479,7 +480,26 @@ def wcx_predict(
 
     if args.plot:
         logging.info("Writing plots ...")
-        exec_write_plots(rem_input, results)
+        data = {
+            "ref_gender": str(rem_input["ref_gender"]),
+            "beta": str(rem_input["args"].beta),
+            "zscore": str(rem_input["args"].zscore),
+            "binsize": str(rem_input["binsize"]),
+            "n_reads": str(rem_input["n_reads"]),
+            "cairo": rem_input["args"].cairo,
+            "results_r": results["results_r"],
+            "results_w": results["results_w"],
+            "results_c": results["results_c"],
+            "ylim": str(rem_input["args"].ylim),
+            "regions": str(rem_input["args"].regions),
+            "out_dir": str("{}.plots".format(rem_input["args"].outid)),
+        }
+
+        if rem_input["args"].add_plot_title:
+            # Strip away paths from the outid if need be
+            data["plot_title"] = str(os.path.basename(rem_input["args"].outid))
+
+        write_plots(data)
 
     logging.info("Finished prediction")
 

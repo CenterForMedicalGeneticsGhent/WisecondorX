@@ -1,47 +1,13 @@
 # WisecondorX
 
-import os
 import re
 import numpy as np
 
 from wisecondorx.overall_tools import (
-    exec_R,
     get_z_score,
     get_median_segment_variance,
     get_cpa,
 )
-
-"""
-Writes plots.
-"""
-
-
-def exec_write_plots(rem_input, results):
-    json_plot_dir = os.path.abspath(rem_input["args"].outid + "_plot_tmp")
-    json_dict = {
-        "R_script": str("{}/include/plotter.R".format(rem_input["wd"])),
-        "ref_gender": str(rem_input["ref_gender"]),
-        "beta": str(rem_input["args"].beta),
-        "zscore": str(rem_input["args"].zscore),
-        "binsize": str(rem_input["binsize"]),
-        "n_reads": str(rem_input["n_reads"]),
-        "cairo": str(rem_input["args"].cairo),
-        "results_r": results["results_r"],
-        "results_w": results["results_w"],
-        "results_c": results["results_c"],
-        "ylim": str(rem_input["args"].ylim),
-        "regions": str(rem_input["args"].regions),
-        "infile": str("{}.json".format(json_plot_dir)),
-        "out_dir": str("{}.plots".format(rem_input["args"].outid)),
-    }
-
-    if rem_input["args"].add_plot_title:
-        # Strip away paths from the outid if need be
-        json_dict["plot_title"] = str(
-            os.path.basename(rem_input["args"].outid)
-        )
-
-    exec_R(json_dict)
 
 
 """
