@@ -97,9 +97,7 @@ def wcx_convert(
                 continue
 
             logging.info(
-                "Working at {}; processing {} bins".format(
-                    chr, int(reads_file.lengths[index] / float(binsize) + 1)
-                )
+                f"Working at {chr}; processing {int(reads_file.lengths[index] / float(binsize) + 1)} bins"
             )
             counts = np.zeros(
                 int(reads_file.lengths[index] / float(binsize) + 1),

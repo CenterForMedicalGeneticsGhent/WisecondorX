@@ -51,7 +51,7 @@ def _compute_per_bin_stats(indexes, distances):
 def _chrY_metrics(ref, suf, mean_d, n_refs, cutoff_outlier):
     if suf != ".M":
         return None
-    key = "masked_bins_per_chr_cum" + suf
+    key = f"masked_bins_per_chr_cum{suf}"
     if key not in ref:
         return None
     mbpcc = np.atleast_1d(ref[key][...])
@@ -83,8 +83,8 @@ def _chrY_metrics(ref, suf, mean_d, n_refs, cutoff_outlier):
 
 
 def _compute_metrics(ref, suf):
-    idx_key = "indexes" + suf
-    dist_key = "distances" + suf
+    idx_key = f"indexes{suf}"
+    dist_key = f"distances{suf}"
     if idx_key not in ref or dist_key not in ref:
         return None
     indexes, distances = ref[idx_key], ref[dist_key]
@@ -139,9 +139,9 @@ def _legacy_autosomal_prefix_compat_issues(ref):
     a_autosomal_prefix = np.atleast_1d(ref["mask"][...])[:a_autosomal_span]
 
     for suf in [".F", ".M"]:
-        bins_key = "bins_per_chr{}".format(suf)
-        cum_key = "masked_bins_per_chr_cum{}".format(suf)
-        mask_key = "mask{}".format(suf)
+        bins_key = f"bins_per_chr{suf}"
+        cum_key = f"masked_bins_per_chr_cum{suf}"
+        mask_key = f"mask{suf}"
         if bins_key not in ref or cum_key not in ref or mask_key not in ref:
             continue
 
@@ -154,9 +154,7 @@ def _legacy_autosomal_prefix_compat_issues(ref):
         s_autosomal_masked = int(s_cum[21])
         if s_autosomal_masked != a_autosomal_masked:
             issues.append(
-                "{} autosomal masked bins ({}) differ from A ({})".format(
-                    suf, s_autosomal_masked, a_autosomal_masked
-                )
+                f"{suf} autosomal masked bins ({s_autosomal_masked}) differ from A ({a_autosomal_masked})"
             )
 
         s_autosomal_prefix = np.atleast_1d(ref[mask_key][...])[
@@ -166,9 +164,7 @@ def _legacy_autosomal_prefix_compat_issues(ref):
             s_autosomal_prefix, a_autosomal_prefix
         ):
             issues.append(
-                "{} autosomal mask prefix differs from A (legacy predict incompatible)".format(
-                    suf
-                )
+                f"{suf} autosomal mask prefix differs from A (legacy predict incompatible)"
             )
     return issues
 
@@ -282,9 +278,9 @@ def wcx_refqc(
         ref.close()
         return 2
 
-    logging.info("Starting ref-QC for file: {}".format(npz))
+    logging.info(f"Starting ref-QC for file: {npz}")
     if binsize:
-        logging.info("Reference binsize: {} bp".format(binsize))
+        logging.info(f"Reference binsize: {binsize} bp")
     else:
         logging.info("Reference binsize: (unknown)")
 
@@ -299,7 +295,7 @@ def wcx_refqc(
     }
 
     for issue in compat_issues:
-        logging.error("[COMPAT] {}".format(issue))
+        logging.error(f"[COMPAT] {issue}")
     if compat_issues:
         worst = max(worst, 2)
 
@@ -345,14 +341,14 @@ def wcx_refqc(
             logger_func = logging.info
 
         logger_func(
-            f"[{label}] n_bins={m['n_bins']}, mean(dist)={m['mean_of_means']:.4f}, std(dist)={m['std_of_means']:.4f}, "
+            f"[{label}] n_bins={m['n_bins']}, mean(dist)={m['mean_of_means']:.3f}, std(dist)={m['std_of_means']:.3f}, "
             f"outliers={m['n_mean_outlier']} ({m['outlier_pct']:.2f}%), n_refs<{MINREFBINS}={m['n_low_refs']}"
         )
         if m.get("chrY") and m["chrY"].get("n_valid", 0) > 0:
             cy = m["chrY"]
             qc_data["metrics"][label]["chrY"] = cy
             logger_func(
-                f"       chrY: n_bins={cy['n_bins']}, mean={cy['mean_of_means']:.4f}, std={cy['std_of_means']:.4f}, "
+                f"       chrY: n_bins={cy['n_bins']}, mean={cy['mean_of_means']:.3f}, std={cy['std_of_means']:.3f}, "
                 f"outliers={cy['n_mean_outlier']}, n_refs<{MINREFBINS}={cy['n_low_refs']}, "
                 f"usable={cy.get('n_usable', 0)} ({cy.get('usable_pct', np.nan):.2f}%)"
             )

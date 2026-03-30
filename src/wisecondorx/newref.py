@@ -364,18 +364,18 @@ def wcx_newref(
     base_path = os.path.join(split_path[0], split_path[1])
 
     args.basepath = base_path
-    args.prepfile = "{}_prep.npz".format(base_path)
-    args.prepdatafile = "{}_prep_data.npy".format(base_path)
-    args.partfile = "{}_part".format(base_path)
+    args.prepfile = f"{base_path}_prep.npz"
+    args.prepdatafile = f"{base_path}_prep_data.npy"
+    args.partfile = f"{base_path}_part"
 
     samples = []
     logging.info("Importing data ...")
     for infile in args.infiles:
-        logging.info("Loading: {}".format(infile))
+        logging.info(f"Loading: {infile}")
         npzdata = np.load(infile, encoding="latin1", allow_pickle=True)
         sample = npzdata["sample"].item()
         binsize = int(npzdata["binsize"])
-        logging.info("Binsize: {}".format(int(binsize)))
+        logging.info(f"Binsize: {int(binsize)}")
         samples.append(scale_sample(sample, binsize, args.binsize))
 
     samples = np.array(samples)
@@ -400,7 +400,7 @@ def wcx_newref(
     outfiles = []
     if len(genders) > 9:
         logging.info("Starting autosomal reference creation ...")
-        args.tmpoutfile = "{}.tmp.A.npz".format(args.basepath)
+        args.tmpoutfile = f"{args.basepath}.tmp.A.npz"
         outfiles.append(args.tmpoutfile)
         tool_newref_prep(args, samples, "A", mask_A, bins_per_chr)
         logging.info("This might take a while ...")
@@ -507,9 +507,7 @@ def tool_newref_prep(args, samples, gender, mask, bins_per_chr):
         bad_bins_mask[class_mask] = class_bad_bins
         if np.any(class_bad_bins):
             logging.info(
-                "Removing {} anomalous {} bins based on PCA distance (cutoff={:.4f})".format(
-                    int(np.sum(class_bad_bins)), class_name, cutoff
-                )
+                f"Removing {int(np.sum(class_bad_bins))} anomalous {class_name} bins based on PCA distance (cutoff={cutoff:.3f})"
             )
 
     if np.any(bad_bins_mask):

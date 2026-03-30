@@ -509,12 +509,8 @@ def _generate_regions_bed(rem_input, results):
 
 
 def _generate_segments_and_aberrations_bed(rem_input, results):
-    segments_file = open(
-        "{}_segments.bed".format(rem_input["args"].outid), "w"
-    )
-    aberrations_file = open(
-        "{}_aberrations.bed".format(rem_input["args"].outid), "w"
-    )
+    segments_file = open(f"{rem_input['args'].outid}_segments.bed", "w")
+    aberrations_file = open(f"{rem_input['args'].outid}_aberrations.bed", "w")
     segments_file.write("chr\tstart\tend\tratio\tzscore\n")
     aberrations_file.write("chr\tstart\tend\tratio\tzscore\ttype\n")
 
@@ -524,14 +520,26 @@ def _generate_segments_and_aberrations_bed(rem_input, results):
             chr_name = "X"
         if chr_name == "24":
             chr_name = "Y"
+
+        ratio_str = (
+            f"{segment[4]:.3f}"
+            if isinstance(segment[4], (float, np.float64, np.float32))
+            else str(segment[4])
+        )
+        zscore_str = (
+            f"{segment[3]:.3f}"
+            if isinstance(segment[3], (float, np.float64, np.float32))
+            else str(segment[3])
+        )
+
         row = [
             chr_name,
             int(segment[1] * rem_input["binsize"] + 1),
             int(segment[2] * rem_input["binsize"]),
-            segment[4],
-            segment[3],
+            ratio_str,
+            zscore_str,
         ]
-        segments_file.write("{}\n".format("\t".join([str(x) for x in row])))
+        segments_file.write(f"{'\t'.join([str(x) for x in row])}\n")
 
         ploidy = 2
         if (chr_name == "X" or chr_name == "Y") and rem_input[
@@ -544,25 +552,25 @@ def _generate_segments_and_aberrations_bed(rem_input, results):
                 > _get_aberration_cutoff(rem_input["args"].beta, ploidy)[1]
             ):
                 aberrations_file.write(
-                    "{}\tgain\n".format("\t".join([str(x) for x in row]))
+                    f"{'\t'.join([str(x) for x in row])}\tgain\n"
                 )
             elif (
                 float(segment[4])
                 < _get_aberration_cutoff(rem_input["args"].beta, ploidy)[0]
             ):
                 aberrations_file.write(
-                    "{}\tloss\n".format("\t".join([str(x) for x in row]))
+                    f"{'\t'.join([str(x) for x in row])}\tloss\n"
                 )
         elif isinstance(segment[3], str):
             continue
         else:
             if float(segment[3]) > rem_input["args"].zscore:
                 aberrations_file.write(
-                    "{}\tgain\n".format("\t".join([str(x) for x in row]))
+                    f"{'\t'.join([str(x) for x in row])}\tgain\n"
                 )
             elif float(segment[3]) < -rem_input["args"].zscore:
                 aberrations_file.write(
-                    "{}\tloss\n".format("\t".join([str(x) for x in row]))
+                    f"{'\t'.join([str(x) for x in row])}\tloss\n"
                 )
 
     segments_file.close()
@@ -576,7 +584,7 @@ def _get_aberration_cutoff(beta, ploidy):
 
 
 def _generate_chr_statistics_file(rem_input, results):
-    stats_file = open("{}_statistics.txt".format(rem_input["args"].outid), "w")
+    stats_file = open(f"{rem_input['args'].outid}_statistics.txt", "w")
     stats_file.write("chr\tratio.mean\tratio.median\tzscore\n")
     chr_ratio_means = [
         np.ma.average(
@@ -612,37 +620,31 @@ def _generate_chr_statistics_file(rem_input, results):
 
         row = [
             chr_name,
-            chr_ratio_means[chr],
-            chr_ratio_medians[chr],
-            chr_z_scores[chr],
+            f"{chr_ratio_means[chr]:.3f}",
+            f"{chr_ratio_medians[chr]:.3f}",
+            f"{chr_z_scores[chr]:.3f}"
+            if isinstance(chr_z_scores[chr], (float, np.float64, np.float32))
+            else str(chr_z_scores[chr]),
         ]
 
         stats_file.write("\t".join([str(x) for x in row]) + "\n")
 
     stats_file.write(
-        "Gender based on --yfrac (or manually overridden by --gender): {}\n".format(
-            str(rem_input["gender"])
-        )
+        f"Gender based on --yfrac (or manually overridden by --gender): {rem_input['gender']}\n"
     )
 
-    stats_file.write("Number of reads: {}\n".format(str(rem_input["n_reads"])))
+    stats_file.write(f"Number of reads: {rem_input['n_reads']}\n")
 
     stats_file.write(
-        "Standard deviation of the ratios per chromosome: {}\n".format(
-            str(round(float(np.nanstd(chr_ratio_means)), 5))
-        )
+        f"Standard deviation of the ratios per chromosome: {np.nanstd(chr_ratio_means):.3f}\n"
     )
 
     stats_file.write(
-        "Median segment variance per bin (doi: 10.1093/nar/gky1263): {}\n".format(
-            str(msv)
-        )
+        f"Median segment variance per bin (doi: 10.1093/nar/gky1263): {msv:.3f}\n"
     )
 
     stats_file.write(
-        "Copy number profile abnormality (CPA) score (doi: 10.1186/s13073-020-00735-4): {}\n".format(
-            str(cpa)
-        )
+        f"Copy number profile abnormality (CPA) score (doi: 10.1186/s13073-020-00735-4): {cpa:.3f}\n"
     )
 
     stats_file.close()

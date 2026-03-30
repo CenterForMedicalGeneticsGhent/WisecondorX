@@ -7,7 +7,7 @@ This document provides project-specific instructions and architectural context f
 WisecondorX is a bioinformatics tool for Copy Number Variation (CNV) analysis in whole-genome sequencing data. It is an evolution of the original WISECONDOR algorithm, optimized for speed and accuracy.
 
 ### Core Stack
-- **Language:** Python 3.10+
+- **Language:** Python 3.12+
 - **Data Science:** NumPy, SciPy, Pandas, Scikit-learn, Matplotlib
 - **Bioinformatics:** Pysam
 - **CLI:** Typer
@@ -53,6 +53,7 @@ Use `pixi run` for all standard development tasks to ensure environment consiste
 - Adhere to the Ruff configuration in `pyproject.toml`.
 - **Line Length:** 79 characters.
 - **Import Sorting:** Ruff handles this; ensure it's run before committing.
+- **String Formatting:** Use f-strings instead of `.format()` and limit outputs to 3 decimals where applicable.
 
 ### Testing Guidelines
 - **Contract Tests:** When adding features that change how data is stored or processed, update the contract tests in `tests/`.

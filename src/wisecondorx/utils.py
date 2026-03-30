@@ -33,9 +33,7 @@ def scale_sample(sample, from_size, to_size):
         or to_size % from_size > 0
     ):
         logging.critical(
-            "Impossible binsize scaling requested: {} to {}".format(
-                int(from_size), int(to_size)
-            )
+            f"Impossible binsize scaling requested: {int(from_size)} to {int(to_size)}"
         )
         sys.exit()
 
