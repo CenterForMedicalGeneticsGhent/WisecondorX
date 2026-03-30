@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-
+import typer
 import numpy as np
 
 MINREFBINS = 150
@@ -234,14 +234,16 @@ def _verdict_m(m):
     return level, msg
 
 
-def qc_reference(npz_path: Path):
+def wcx_refqc(
+    reference: Path = typer.Argument(..., help="Path to the reference file."),
+):
     """
     Reads the given numpy array representing a WisecondorX reference
     and checks it for common quality issues using predefined heuristics.
 
     Returns the worst severity code found: 0 (PASS), 1 (WARN), 2 (FAIL).
     """
-    npz = Path(npz_path).resolve()
+    npz = Path(reference).resolve()
     if not npz.exists():
         logging.error(f"QC check skipped: file not found: {npz}")
         return 2

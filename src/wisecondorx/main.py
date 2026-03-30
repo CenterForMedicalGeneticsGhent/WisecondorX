@@ -6,6 +6,7 @@ import typer
 from wisecondorx.convert import wcx_convert
 from wisecondorx.newref import wcx_newref
 from wisecondorx.predict import wcx_sex, wcx_predict
+from wisecondorx.refqc import wcx_refqc
 from wisecondorx import __version__
 
 VERSION: str = __version__
@@ -25,9 +26,10 @@ app = typer.Typer(
     add_completion=False,
 )
 app.command(name="convert")(wcx_convert)
-app.command(name="newref")(wcx_newref)
 app.command(name="gender")(wcx_sex)
+app.command(name="newref")(wcx_newref)
 app.command(name="predict")(wcx_predict)
+app.command(name="refqc")(wcx_refqc)
 
 
 @app.callback()

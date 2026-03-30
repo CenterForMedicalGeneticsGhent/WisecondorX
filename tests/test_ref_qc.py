@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from wisecondorx.ref_qc import (
+from wisecondorx.refqc import (
     _legacy_autosomal_prefix_compat_issues,
     _verdict_m,
 )

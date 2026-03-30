@@ -11,11 +11,6 @@ import numpy as np
 import pandas as pd
 from enum import Enum
 
-"""
-Scales the bin size of a sample.npz to the one  
-requested for the reference
-"""
-
 
 class Sex(Enum):
     MALE = "M"
@@ -24,6 +19,10 @@ class Sex(Enum):
 
 
 def scale_sample(sample, from_size, to_size):
+    """
+    Scales the bin size of a sample.npz to the one
+    requested for the reference
+    """
     if not to_size or from_size == to_size:
         return sample
 
@@ -54,29 +53,25 @@ def scale_sample(sample, from_size, to_size):
     return return_sample
 
 
-"""
-Levels gonosomal reads with the one at the autosomes.
-"""
-
-
-def gender_correct(sample, gender):
-    if gender == "M":
+def sex_correct(sample, sex):
+    """
+    Levels gonosomal reads with the one at the autosomes.
+    """
+    if sex == "M":
         sample["23"] = sample["23"] * 2
         sample["24"] = sample["24"] * 2
 
     return sample
 
 
-"""
-Communicates with R. Outputs new json dictionary,
-resulting from R, if 'outfile' is a key in the
-input json. 'infile' and 'R_script' are mandatory keys
-and correspond to the input file required to execute the
-R_script, respectively.
-"""
-
-
 def exec_R(json_dict):
+    """
+    Communicates with R. Outputs new json dictionary,
+    resulting from R, if 'outfile' is a key in the
+    input json. 'infile' and 'R_script' are mandatory keys
+    and correspond to the input file required to execute the
+    R_script, respectively.
+    """
     json.dump(json_dict, open(json_dict["infile"], "w"))
 
     r_cmd = ["Rscript", json_dict["R_script"], "--infile", json_dict["infile"]]
@@ -96,12 +91,10 @@ def exec_R(json_dict):
         return json_out
 
 
-"""
-Calculates between sample z-score.
-"""
-
-
 def get_z_score(results_c, results):
+    """
+    Calculates between sample z-score.
+    """
     results_nr, results_r, results_w = (
         results["results_nr"],
         results["results_r"],
@@ -139,12 +132,10 @@ def get_z_score(results_c, results):
     return zs
 
 
-"""
-Returns MSV, measure for sample-wise noise.
-"""
-
-
 def get_median_segment_variance(results_c, results_r):
+    """
+    Returns MSV, measure for sample-wise noise.
+    """
     vars = []
     for segment in results_c:
         segment_r = results_r[segment[0]][int(segment[1]) : int(segment[2])]
@@ -155,12 +146,10 @@ def get_median_segment_variance(results_c, results_r):
     return np.median(vars)
 
 
-"""
-Returns CPA, measure for sample-wise abnormality.
-"""
-
-
 def get_cpa(results_c, binsize):
+    """
+    Returns CPA, measure for sample-wise abnormality.
+    """
     x = 0
     for segment in results_c:
         x += (segment[2] - segment[1] + 1) * binsize * abs(segment[3])
