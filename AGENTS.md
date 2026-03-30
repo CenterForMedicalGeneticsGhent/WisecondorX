@@ -28,9 +28,10 @@ The project relies heavily on `.npz` files for intermediate storage. These files
 - **Intermediate Files:** Creation of references often involves temporary "prep" and "part" files.
 
 ### CLI Structure
-- `src/wisecondorx/main.py`: The main entry point using `argparse` for subcommands.
-- `*_control.py`: Higher-level coordination of pipeline stages.
-- `*_tools.py`: Lower-level computational logic.
+- `src/wisecondorx/main.py`: The main entry point using `typer` for subcommands.
+- `src/wisecondorx/{convert,newref,predict}.py`: Functions for each pipeline stage.
+- `src/wisecondorx/utils.py`: Helper functions used by the pipeline stages.
+- `src/wisecondorx/plotter.py`: Plotting functions for the pipeline stages.
 - `src/wisecondorx/include/`: Contains R script `CBS.R` (specifically for Circular Binary Segmentation (CBS)) invoked via Python's `subprocess`.
 
 ## Development Workflow
@@ -40,7 +41,7 @@ Use `pixi run` for all standard development tasks to ensure environment consiste
 - `pixi run lint`: Check code quality with Ruff.
 - `pixi run format`: Format code with Ruff.
 - `pixi run test`: Run the test suite.
-- `pixi run hooks`: Run pre-commit hooks (managed by `prek`).
+- `pixi run docker-build`: Build the Docker image.
 
 ### Code Style
 - Adhere to the Ruff configuration in `pyproject.toml`.
@@ -49,12 +50,11 @@ Use `pixi run` for all standard development tasks to ensure environment consiste
 
 ### Testing Guidelines
 - **Contract Tests:** When adding features that change how data is stored or processed, update the contract tests in `tests/`.
-- **Functional Tests:** Aim for high coverage of the computational logic in `*_tools.py`.
+- **Functional Tests:** Aim for high coverage of the computational logic.
 - **R Integration:** Be mindful that changes to R scripts may require updates to the Python wrapper logic that calls them.
 
 ## Gemini CLI Specific Instructions
 
 - **Environment Awareness:** Always prefer `pixi run <command>` over direct execution if a pixi task exists.
 - **Binary Files:** When investigating issues related to `.npz` files, use `numpy.load` within a script or via `run_shell_command` to inspect the contents.
-- **Surgical Updates:** When fixing bugs, prioritize fixing the underlying logic in `*_tools.py` and adding a corresponding test case.
-- **Context Management:** The codebase uses multiple small modules. When working on a specific stage (e.g., `predict`), read both the `_control.py` and `_tools.py` for that stage to understand the full context.
+- **Surgical Updates:** When fixing bugs, prioritize fixing the underlying logic lower level functions with minimal code changes and adding a corresponding test case.
