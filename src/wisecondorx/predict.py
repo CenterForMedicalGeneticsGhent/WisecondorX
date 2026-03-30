@@ -21,10 +21,24 @@ from typing import Annotated
 
 
 def wcx_sex(
-    infile: Path = typer.Argument(..., help=".npz input file"),
-    reference: Path = typer.Argument(
-        ..., help="Reference .npz, as previously created with newref"
-    ),
+    infile: Annotated[
+        Path,
+        typer.Argument(
+            help=".npz input file",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+    reference: Annotated[
+        Path,
+        typer.Argument(
+            help="Reference .npz, as previously created with newref",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
 ) -> None:
     """
     Returns the sex of a .npz resulting from convert, based on a Gaussian mixture model trained during the newref phase.
@@ -42,24 +56,42 @@ def wcx_sex(
 
 
 def wcx_predict(
-    infile: Path = typer.Argument(..., help=".npz input file"),
-    reference: Path = typer.Argument(
-        ..., help="Reference .npz, as previously created with newref"
-    ),
-    outid: str = typer.Argument(
-        ...,
-        help="Basename (w/o extension) of output files (paths are allowed, e.g. path/to/ID_1)",
-    ),
-    minrefbins: int = typer.Option(
-        150,
-        "--minrefbins",
-        help="Minimum amount of sensible reference bins per target bin.",
-    ),
-    maskrepeats: int = typer.Option(
-        5,
-        "--maskrepeats",
-        help="Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.",
-    ),
+    infile: Annotated[
+        Path,
+        typer.Argument(
+            help=".npz input file",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+    reference: Annotated[
+        Path,
+        typer.Argument(
+            help="Reference .npz, as previously created with newref",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+    outid: Annotated[
+        str,
+        typer.Argument(
+            help="Basename (w/o extension) of output files (paths are allowed, e.g. path/to/ID_1)"
+        ),
+    ],
+    minrefbins: Annotated[
+        int,
+        typer.Option(
+            help="Minimum amount of sensible reference bins per target bin."
+        ),
+    ] = 150,
+    maskrepeats: Annotated[
+        int,
+        typer.Option(
+            help="Regions with distances > mean + sd * 3 will be masked. Number of masking cycles."
+        ),
+    ] = 5,
     alpha: Annotated[
         float,
         typer.Option(
@@ -80,43 +112,41 @@ def wcx_predict(
             help="When beta is given, --zscore is ignored and a ratio cut-off is used to call aberrations.",
         ),
     ] = None,
-    blacklist: Path = typer.Option(
-        None,
-        "--blacklist",
-        help="Blacklist that masks regions in output, structure of header-less file: chr...(/t)startpos(/t)endpos(/n)",
-    ),
-    gender: Sex = typer.Option(
-        None,
-        "--gender",
-        help="Force WisecondorX to analyze this case as a male (M) or a female (F)",
-    ),
-    ylim: str = typer.Option(
-        "def", "--ylim", help="y-axis limits for plotting. e.g. [-2,2]"
-    ),
-    bed: bool = typer.Option(
-        True,
-        "--bed",
-        help="Outputs tab-delimited .bed files, containing the most important information",
-    ),
-    plot: bool = typer.Option(False, "--plot", help="Output .png plots"),
-    cairo: bool = typer.Option(
-        True,
-        "--cairo",
-        help="Use cairo for plotting",
-    ),
-    add_plot_title: bool = typer.Option(
-        False,
-        "--add-plot-title",
-        help="Add the output name as plot title",
-    ),
-    seed: int = typer.Option(
-        42, "--seed", help="Seed for segmentation algorithm"
-    ),
-    regions: Path = typer.Option(
-        None,
-        "--regions",
-        help="bed file with regions to be marked on the output plot",
-    ),
+    blacklist: Annotated[
+        Path,
+        typer.Option(
+            help="Blacklist that masks regions in output, structure of header-less file: chr...(/t)startpos(/t)endpos(/n)"
+        ),
+    ] = None,
+    gender: Annotated[
+        Sex,
+        typer.Option(
+            help="Force WisecondorX to analyze this case as a male (M) or a female (F)"
+        ),
+    ] = None,
+    ylim: Annotated[
+        str, typer.Option(help="y-axis limits for plotting. e.g. [-2,2]")
+    ] = "def",
+    bed: Annotated[
+        bool,
+        typer.Option(
+            help="Outputs tab-delimited .bed files, containing the most important information"
+        ),
+    ] = True,
+    plot: Annotated[bool, typer.Option(help="Output .png plots")] = False,
+    cairo: Annotated[bool, typer.Option(help="Use cairo for plotting")] = True,
+    add_plot_title: Annotated[
+        bool, typer.Option(help="Add the output name as plot title")
+    ] = False,
+    seed: Annotated[
+        int, typer.Option(help="Seed for segmentation algorithm")
+    ] = 42,
+    regions: Annotated[
+        Path,
+        typer.Option(
+            help="bed file with regions to be marked on the output plot"
+        ),
+    ] = None,
 ) -> None:
     """
     Find copy number aberrations.
@@ -511,14 +541,14 @@ def _generate_segments_and_aberrations_bed(rem_input, results):
         if rem_input["args"].beta is not None:
             if (
                 float(segment[4])
-                > __get_aberration_cutoff(rem_input["args"].beta, ploidy)[1]
+                > _get_aberration_cutoff(rem_input["args"].beta, ploidy)[1]
             ):
                 aberrations_file.write(
                     "{}\tgain\n".format("\t".join([str(x) for x in row]))
                 )
             elif (
                 float(segment[4])
-                < __get_aberration_cutoff(rem_input["args"].beta, ploidy)[0]
+                < _get_aberration_cutoff(rem_input["args"].beta, ploidy)[0]
             ):
                 aberrations_file.write(
                     "{}\tloss\n".format("\t".join([str(x) for x in row]))
@@ -539,7 +569,7 @@ def _generate_segments_and_aberrations_bed(rem_input, results):
     aberrations_file.close()
 
 
-def __get_aberration_cutoff(beta, ploidy):
+def _get_aberration_cutoff(beta, ploidy):
     loss_cutoff = np.log2((ploidy - (beta / 2)) / ploidy)
     gain_cutoff = np.log2((ploidy + (beta / 2)) / ploidy)
     return loss_cutoff, gain_cutoff
@@ -754,24 +784,20 @@ def get_weights(ref_file, ap):
     distances can serve as inverse weights for
     CBS, Z-scoring and plotting.
     """
-    inverse_weights = [
-        np.mean(np.sqrt(x)) for x in ref_file["distances{}".format(ap)]
-    ]
-    weights = np.array([1 / x for x in inverse_weights])
-    return weights
+    inverse_weights = np.mean(np.sqrt(ref_file[f"distances{ap}"]), axis=1)
+    weights = 1.0 / inverse_weights
+    # Normalize weights by their mean
+    return weights / np.nanmean(weights)
 
 
 def inflate_results(results, rem_input):
     """
     Unmasks results array.
     """
-    temp = [0 for x in rem_input["mask"]]
-    j = 0
-    for i, val in enumerate(rem_input["mask"]):
-        if val:
-            temp[i] = results[j]
-            j += 1
-    return temp
+    mask = np.array(rem_input["mask"])
+    inflated = np.zeros(len(mask))
+    inflated[mask] = results
+    return inflated.tolist()
 
 
 def log_trans(results, log_r_median):
@@ -780,21 +806,32 @@ def log_trans(results, log_r_median):
     all corresponding possible positions (at results_r, results_z
     and results_w are set to 0 (blacklist)).
     """
-    for chr in range(len(results["results_r"])):
-        results["results_r"][chr] = np.log2(results["results_r"][chr])
+    new_results_r = []
+    for chr_idx in range(len(results["results_r"])):
+        # Ensure it's a numpy array for vectorization
+        r_orig = np.array(results["results_r"][chr_idx])
+        z = np.array(results["results_z"][chr_idx])
+        w = np.array(results["results_w"][chr_idx])
 
-    results["results_r"] = [x.tolist() for x in results["results_r"]]
+        # Avoid log2(0) warnings by using where or masking
+        r = np.zeros_like(r_orig, dtype=float)
+        valid = (r_orig > 0) & np.isfinite(r_orig)
+        r[valid] = np.log2(r_orig[valid])
 
-    for c in range(len(results["results_r"])):
-        for i, rR in enumerate(results["results_r"][c]):
-            if not np.isfinite(rR):
-                results["results_r"][c][i] = 0
-                results["results_z"][c][i] = 0
-                results["results_w"][c][i] = 0
-            if results["results_r"][c][i] != 0:
-                results["results_r"][c][i] = (
-                    results["results_r"][c][i] - log_r_median
-                )
+        # Mask for values that should be blacklisted (non-finite or non-positive original)
+        to_blacklist = ~valid
+        r[to_blacklist] = 0
+        z[to_blacklist] = 0
+        w[to_blacklist] = 0
+
+        # Apply log_r_median to all valid (non-blacklisted) bins
+        r[valid] -= log_r_median
+
+        new_results_r.append(r.tolist())
+        results["results_z"][chr_idx] = z
+        results["results_w"][chr_idx] = w
+
+    results["results_r"] = new_results_r
 
 
 def apply_blacklist(rem_input, results):
