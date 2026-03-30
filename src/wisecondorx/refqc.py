@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+from typing import Annotated
 import typer
 import numpy as np
 
@@ -23,13 +24,19 @@ def _get_gender_suffixes(ref):
 
 
 def _compute_per_bin_stats(indexes, distances):
+    # Vectorized path for standard 2D numpy arrays
+    if isinstance(distances, np.ndarray) and distances.ndim == 2:
+        mean_d = np.mean(distances, axis=1)
+        max_d = np.max(distances, axis=1)
+        n_refs = np.full(len(indexes), distances.shape[1], dtype=int)
+        return mean_d, max_d, n_refs
+
     n = len(indexes)
     mean_d = np.zeros(n, dtype=float)
     max_d = np.zeros(n, dtype=float)
     n_refs = np.zeros(n, dtype=int)
     for i in range(n):
         d = np.atleast_1d(distances[i]).ravel()
-        idx = np.atleast_1d(indexes[i]).ravel()
         if len(d) == 0:
             mean_d[i] = np.nan
             max_d[i] = np.nan
@@ -37,7 +44,7 @@ def _compute_per_bin_stats(indexes, distances):
         else:
             mean_d[i] = np.mean(d)
             max_d[i] = np.max(d)
-            n_refs[i] = len(idx)
+            n_refs[i] = len(d)
     return mean_d, max_d, n_refs
 
 
@@ -235,7 +242,15 @@ def _verdict_m(m):
 
 
 def wcx_refqc(
-    reference: Path = typer.Argument(..., help="Path to the reference file."),
+    reference: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the reference file.",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
 ):
     """
     Reads the given numpy array representing a WisecondorX reference
