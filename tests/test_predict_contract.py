@@ -7,7 +7,7 @@ from tests._test_utils import make_ref_arrays, make_sample
 
 class TestPredictContract(unittest.TestCase):
     def test_predict_normalize_accepts_reference_contract_autosomes(self):
-        from wisecondorx.predict_control import normalize
+        from wisecondorx.predict import normalize
 
         bins_per_chr_a = [1] * 22
         ref = make_ref_arrays(bins_per_chr_a, refsize=3)
@@ -29,7 +29,7 @@ class TestPredictContract(unittest.TestCase):
         self.assertEqual(np.ndim(results_z), 1)
 
     def test_predict_normalize_accepts_reference_contract_male_gonosomes(self):
-        from wisecondorx.predict_control import normalize
+        from wisecondorx.predict import normalize
 
         bins_per_chr_m = [1] * 24
         ref_m = make_ref_arrays(bins_per_chr_m, refsize=3)
@@ -63,7 +63,7 @@ class TestPredictContract(unittest.TestCase):
         self.assertEqual(np.ndim(results_z), 1)
 
     def test_legacy_append_inflate_contract_requires_aligned_lengths(self):
-        from wisecondorx.predict_tools import inflate_results
+        from wisecondorx.predict import inflate_results
 
         # Old predict behavior: len(appended_results) must equal number of True bins in
         # branch mask passed to inflate_results.
