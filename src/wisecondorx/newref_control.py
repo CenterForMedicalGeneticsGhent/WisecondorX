@@ -9,7 +9,7 @@ import time
 import numpy as np
 from concurrent import futures
 
-from wisecondorx.newref_tools import (
+from wisecondorx.newref import (
     normalize_and_mask,
     train_pca,
     get_reference,
