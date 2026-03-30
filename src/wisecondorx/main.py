@@ -32,12 +32,26 @@ app.command(name="predict")(wcx_predict)
 app.command(name="refqc")(wcx_refqc)
 
 
+def version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"WisecondorX version: {VERSION}")
+        raise typer.Exit()
+
+
 @app.callback()
 def main_callback(
     loglevel: str = typer.Option(
         "INFO",
         "--loglevel",
         help="Logging level (info, warning, debug, error, critical)",
+    ),
+    version: bool = typer.Option(
+        None,
+        "--version",
+        "-v",
+        help="Show the version and exit.",
+        callback=version_callback,
+        is_eager=True,
     ),
 ) -> None:
     warnings.filterwarnings("ignore")
