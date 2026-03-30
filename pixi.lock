@@ -3920,13 +3920,14 @@ packages:
 - pypi: ./
   name: wisecondorx
   version: 1.3.0
-  sha256: 42e6f50ebb34a1c6121d029903f07246100474c5ec6087297a24529e8e515278
+  sha256: 5d1af2abfeddac920f1f11475d124ce15b6e1a1102b23c513dc3d846b1277bce
   requires_dist:
   - scipy>=1.17
   - scikit-learn>=1.8
   - pysam>=0.23
   - numpy>=2.4
   - pandas>=3.0
+  - matplotlib>=3.10
   - pytest ; extra == 'testing'
   - ruff ; extra == 'testing'
   - prek ; extra == 'testing'
