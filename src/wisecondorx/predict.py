@@ -212,12 +212,12 @@ def wcx_predict(
     gender = predict_sex(sample, ref_file["trained_cutoff"])
     if not ref_file["is_nipt"]:
         if args.gender:
-            gender = args.gender
+            gender = args.gender.value
         sample = sex_correct(sample, gender)
         ref_gender = gender
     else:
         if args.gender:
-            gender = args.gender
+            gender = args.gender.value
         ref_gender = "F"
 
     logging.info("Normalizing autosomes ...")
