@@ -118,13 +118,14 @@ def get_mask(samples):
     median_cov = np.median(sum_per_bin[sum_per_bin > 0])
     mask = sum_per_bin > (0.05 * median_cov)
 
-    return mask, [
-        sample[str(chr)].shape[0]
-        for chr in range(1, 25)
-        for sample in [samples[0]]
-    ]
+    # Determine per-chromosome bin counts consistent with _samples_to_matrix:
+    # for each chromosome, use the maximum length across all samples.
+    bins_per_chr = []
+    for chr in range(1, 25):
+        max_len = max(sample[str(chr)].shape[0] for sample in samples)
+        bins_per_chr.append(max_len)
 
-
+    return mask, bins_per_chr
 def normalize_and_mask(samples, chrs, mask):
     """
     Normalizes samples for read depth and applies mask.
