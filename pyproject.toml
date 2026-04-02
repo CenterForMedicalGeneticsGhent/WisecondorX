@@ -96,4 +96,4 @@ test = { features = ["test"], solve-group = "default" }
 lint = { cmd = "ruff check src/"}
 test = { cmd = "PYTHONPATH=. pytest tests/", default-environment = "test" }
 format = { cmd = "ruff format src/"}
-docker-build = "docker build --platform linux/amd64 -t cmgg/wisecondorx:latest ."
+docker-build = "docker build --platform linux/amd64 -t quay.io/cmgg/wisecondorx:latest ."
