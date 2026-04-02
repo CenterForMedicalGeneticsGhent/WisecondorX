@@ -265,11 +265,18 @@ def get_ref_for_bins(ref_size, start, end, pca_corrected_data, chr_data):
         distances = np.sum(
             np.power(chr_data - pca_corrected_data[this_bin, :], 2), axis=1
         )
-        # Use argpartition for O(n) top-k selection, then sort the result
-        idx = np.argpartition(distances, ref_size)[:ref_size]
+        # Clamp the requested reference size to the available candidate count.
+        n_candidates = distances.shape[0]
+        k = min(ref_size, n_candidates)
+        if k <= 0:
+            # No candidates available for this bin; leave defaults in place.
+            continue
+        # Use argpartition for O(n) top-k selection, then sort the result.
+        # np.argpartition expects 0 <= kth < len(distances), so use k - 1.
+        idx = np.argpartition(distances, k - 1)[:k]
         idx = idx[np.argsort(distances[idx])]
-        ref_indexes[this_bin - start, :] = idx
-        ref_distances[this_bin - start, :] = distances[idx]
+        ref_indexes[this_bin - start, :k] = idx
+        ref_distances[this_bin - start, :k] = distances[idx]
     return ref_indexes, ref_distances
 
 
