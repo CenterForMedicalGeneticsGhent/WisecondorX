@@ -55,6 +55,9 @@ def tool_newref_prep(args, samples, gender, mask, bins_per_chr):
     masked_indices, masked_chr_ids = _masked_chr_ids(mask, bins_per_chr)
     bad_bins_mask = np.zeros(len(masked_indices), dtype=bool)
 
+    # PCA Distance filtering (via _robust_cutoff): remove unmatchable bins far from median profile.
+    # Higher MAD multipliers (20.0-50.0) retain natural variance so predict works on shallow samples.
+    # The hard floor (10.0-15.0) prevents over-trimming if the training dataset is exceptionally clean.
     if gender == "A":
         class_settings = [("autosomes", masked_chr_ids <= 22, 20.0, 10.0)]
     elif gender == "F":
