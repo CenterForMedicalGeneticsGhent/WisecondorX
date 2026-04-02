@@ -28,7 +28,7 @@ for XY gonosomes (if enough males are included).
 def _robust_cutoff(distances, mad_multiplier, floor):
     """
     Computes a robust distance cutoff to remove unmatchable bins.
-    
+
     :param mad_multiplier: Multiplier applied to the median absolute deviation (MAD).
     :param floor: Absolute minimum value for the cutoff.
     """
@@ -66,12 +66,12 @@ def tool_newref_prep(args, samples, gender, mask, bins_per_chr):
     bad_bins_mask = np.zeros(len(masked_indices), dtype=bool)
 
     # PCA Distance filtering: calculate outlier thresholds independently per chromosome class.
-    # This prevents the noisier chrX/chrY from being heavily pruned when judged against an 
+    # This prevents the noisier chrX/chrY from being heavily pruned when judged against an
     # autosome-dominated median profile.
-    # 
-    # We use higher MAD multipliers (20.0-50.0) and floors (10.0-15.0) 
-    # than typical outlier detection to ensure the reference retains 
-    # enough natural variance to prevent massive NaN gaps when `predict` runs on shallower, 
+    #
+    # We use higher MAD multipliers (20.0-50.0) and floors (10.0-15.0)
+    # than typical outlier detection to ensure the reference retains
+    # enough natural variance to prevent massive NaN gaps when `predict` runs on shallower,
     # noisier routine samples.
     if gender == "A":
         class_settings = [("autosomes", masked_chr_ids <= 22, 20.0, 10.0)]
