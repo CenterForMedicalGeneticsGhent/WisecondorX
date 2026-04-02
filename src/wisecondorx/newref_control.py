@@ -56,13 +56,13 @@ def tool_newref_prep(args, samples, gender, mask, bins_per_chr):
     bad_bins_mask = np.zeros(len(masked_indices), dtype=bool)
 
     if gender == "A":
-        class_settings = [("autosomes", masked_chr_ids <= 22, 10.0, 5.0)]
+        class_settings = [("autosomes", masked_chr_ids <= 22, 20.0, 10.0)]
     elif gender == "F":
-        class_settings = [("chrX", masked_chr_ids == 23, 10.0, 5.0)]
+        class_settings = [("chrX", masked_chr_ids == 23, 20.0, 10.0)]
     else:
         class_settings = [
-            ("chrX", masked_chr_ids == 23, 10.0, 5.0),
-            ("chrY", masked_chr_ids == 24, 20.0, 5.0),
+            ("chrX", masked_chr_ids == 23, 20.0, 10.0),
+            ("chrY", masked_chr_ids == 24, 50.0, 15.0),
         ]
     for class_name, class_mask, mad_mult, floor in class_settings:
         if np.sum(class_mask) < 10:
