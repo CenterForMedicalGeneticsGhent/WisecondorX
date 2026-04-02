@@ -466,9 +466,10 @@ def _generate_regions_bed(rem_input, results):
             # Convert chromosome name to zero-based index
             if chr_name == "chrX" or chr_name == "X":
                 chr = 21
-            if chr_name == "chrY" or chr_name == "Y":
+            elif chr_name == "chrY" or chr_name == "Y":
                 chr = 22
-            chr = int(re.sub("chr", "", chr_name)) - 1
+            else:
+                chr = int(re.sub("chr", "", chr_name)) - 1
             start_bin = int(start) // rem_input["binsize"]
             end_bin = int(end) // rem_input["binsize"]
             if end_bin >= rem_input["bins_per_chr"][chr]:
