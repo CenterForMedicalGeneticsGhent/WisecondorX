@@ -117,8 +117,8 @@ class TestNewrefContract(unittest.TestCase):
         autosome_outlier = 5
         chry_start = int(np.sum(bins_per_chr[:23]))
         chry_outlier = chry_start + 5
-        vals[autosome_outlier] = 7.0
-        vals[chry_outlier] = 7.0
+        vals[autosome_outlier] = 10.0
+        vals[chry_outlier] = 10.0
         pca_first = np.stack([vals, np.zeros(total_bins, dtype=float)], axis=1)
 
         call_count = {"n": 0}
@@ -184,7 +184,7 @@ class TestNewrefContract(unittest.TestCase):
             total_bins,
         )
         autosome_outlier = 5
-        vals[autosome_outlier] = 7.0
+        vals[autosome_outlier] = 10.0
         pca_first = np.stack([vals, np.zeros(total_bins, dtype=float)], axis=1)
 
         call_count = {"n": 0}

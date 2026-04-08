@@ -26,12 +26,22 @@ for XY gonosomes (if enough males are included).
 
 
 def _robust_cutoff(distances, mad_multiplier, floor):
+    """
+    Computes a robust distance cutoff to remove unmatchable bins.
+
+    :param mad_multiplier: Multiplier applied to the median absolute deviation (MAD).
+    :param floor: Absolute minimum value for the cutoff.
+    """
     med = np.median(distances)
     mad = np.median(np.abs(distances - med))
     return max(med + mad_multiplier * mad, floor)
 
 
 def _masked_chr_ids(mask, bins_per_chr):
+    """
+    Maps each `True` index in the 1D mask back to its 1-based chromosome ID.
+    Used to split PCA distance filtering thresholds by chromosome class.
+    """
     masked_indices = np.where(mask)[0]
     chr_ends = np.cumsum(bins_per_chr)
     chr_ids = np.searchsorted(chr_ends, masked_indices, side="right") + 1
@@ -55,14 +65,22 @@ def tool_newref_prep(args, samples, gender, mask, bins_per_chr):
     masked_indices, masked_chr_ids = _masked_chr_ids(mask, bins_per_chr)
     bad_bins_mask = np.zeros(len(masked_indices), dtype=bool)
 
+    # PCA Distance filtering: calculate outlier thresholds independently per chromosome class.
+    # This prevents the noisier chrX/chrY from being heavily pruned when judged against an
+    # autosome-dominated median profile.
+    #
+    # We use higher MAD multipliers (20.0-50.0) and floors (10.0-15.0)
+    # than typical outlier detection to ensure the reference retains
+    # enough natural variance to prevent massive NaN gaps when `predict` runs on shallower,
+    # noisier routine samples.
     if gender == "A":
-        class_settings = [("autosomes", masked_chr_ids <= 22, 10.0, 5.0)]
+        class_settings = [("autosomes", masked_chr_ids <= 22, 20.0, 10.0)]
     elif gender == "F":
-        class_settings = [("chrX", masked_chr_ids == 23, 10.0, 5.0)]
+        class_settings = [("chrX", masked_chr_ids == 23, 20.0, 10.0)]
     else:
         class_settings = [
-            ("chrX", masked_chr_ids == 23, 10.0, 5.0),
-            ("chrY", masked_chr_ids == 24, 20.0, 5.0),
+            ("chrX", masked_chr_ids == 23, 20.0, 10.0),
+            ("chrY", masked_chr_ids == 24, 50.0, 15.0),
         ]
     for class_name, class_mask, mad_mult, floor in class_settings:
         if np.sum(class_mask) < 10:
