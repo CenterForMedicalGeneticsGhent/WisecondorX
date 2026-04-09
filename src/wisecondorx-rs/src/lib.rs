@@ -10,7 +10,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use rayon::prelude::*;
 
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct BamQualityInfo {
     #[pyo3(get)]
@@ -58,9 +58,9 @@ pub fn wcx_convert_core(
 
     match output {
         Ok((counts, qual)) => {
-            let dict = PyDict::new_bound(py);
+            let dict = PyDict::new(py);
             for (chr, array) in counts {
-                let py_array = array.into_pyarray_bound(py);
+                let py_array = array.into_pyarray(py);
                 dict.set_item(chr, py_array)?;
             }
             Ok((dict.into(), qual))
@@ -73,7 +73,7 @@ fn process_record<R: noodles::sam::alignment::Record>(
     record: &R,
     rmdup: bool,
     binsize: usize,
-    thread_counts: &mut Vec<i32>,
+    thread_counts: &mut [i32],
     larp: &mut isize,
     larp2: &mut isize,
     thread_mapped: &mut usize,
@@ -91,28 +91,25 @@ fn process_record<R: noodles::sam::alignment::Record>(
     
     let is_paired = flags.is_segmented();
     let is_proper_pair = flags.is_properly_segmented();
-    let mapq = record.mapping_quality().transpose()?.map(|m| u8::from(m)).unwrap_or(255);
+    let mapq = record.mapping_quality().transpose()?.map(u8::from).unwrap_or(255);
     let pos = pos_opt.unwrap_or(1) as isize - 1; 
     let mate_pos = record.mate_alignment_start().transpose()?.map(usize::from).unwrap_or(1) as isize - 1;
 
     if is_paired {
         if !is_proper_pair { *thread_pair_fail += 1; return Ok(()); }
         if rmdup && *larp == pos && *larp2 == mate_pos { *thread_filter_rmdup += 1; }
-        else {
-            if mapq >= 1 {
-                let loc = (pos as usize) / binsize;
-                if loc < thread_counts.len() { thread_counts[loc] += 1; }
-            } else { *thread_filter_mapq += 1; }
-        }
+        else if mapq >= 1 {
+            let loc = (pos as usize) / binsize;
+            if loc < thread_counts.len() { thread_counts[loc] += 1; }
+        } else { *thread_filter_mapq += 1; }
+
         *larp2 = mate_pos; *thread_pre_retro += 1; *larp = pos;
     } else {
         if rmdup && *larp == pos { *thread_filter_rmdup += 1; }
-        else {
-            if mapq >= 1 {
-                let loc = (pos as usize) / binsize;
-                if loc < thread_counts.len() { thread_counts[loc] += 1; }
-            } else { *thread_filter_mapq += 1; }
-        }
+        else if mapq >= 1 {
+            let loc = (pos as usize) / binsize;
+            if loc < thread_counts.len() { thread_counts[loc] += 1; }
+        } else { *thread_filter_mapq += 1; }
         *thread_pre_retro += 1; *larp = pos;
     }
     Ok(())
@@ -137,10 +134,9 @@ fn process_file(
             if chr_name == "X" { chr_name = "23".to_string(); }
             if chr_name == "Y" { chr_name = "24".to_string(); }
             
-            if let Ok(num) = chr_name.parse::<usize>() {
-                if num >= 1 && num <= 24 {
-                    refs.insert(i, (chr_name, reference.length().get()));
-                }
+            if let Ok(num) = chr_name.parse::<usize>() 
+                && (1..=24).contains(&num) {
+                refs.insert(i, (chr_name, reference.length().get()));
             }
         }
         refs
@@ -187,41 +183,33 @@ fn process_file(
         };
 
         if ext == "bam" {
-            if let Ok(mut reader) = bam::io::indexed_reader::Builder::default().build_from_path(path) {
-                if let Ok(header) = reader.read_header() {
-                    if let Ok(query_iter) = reader.query(&header, &region) {
-                        for result in query_iter {
-                            if let Ok(record) = result {
-                                let _ = process_record(
-                                    &record, rmdup, binsize, &mut thread_counts, &mut larp, &mut larp2,
-                                    &mut thread_mapped, &mut thread_unmapped, &mut thread_no_coord,
-                                    &mut thread_filter_rmdup, &mut thread_filter_mapq, &mut thread_pre_retro,
-                                    &mut thread_pair_fail
-                                );
-                            }
-                        }
+            if let Ok(mut reader) = bam::io::indexed_reader::Builder::default().build_from_path(path)
+                && let Ok(header) = reader.read_header()
+                && let Ok(query_iter) = reader.query(&header, &region) {
+                    for record in query_iter.flatten() {
+                        let _ = process_record(
+                            &record, rmdup, binsize, &mut thread_counts, &mut larp, &mut larp2,
+                            &mut thread_mapped, &mut thread_unmapped, &mut thread_no_coord,
+                            &mut thread_filter_rmdup, &mut thread_filter_mapq, &mut thread_pre_retro,
+                            &mut thread_pair_fail
+                        );
                     }
                 }
-            }
-        } else if ext == "cram" {
-            if let Ok(mut reader) = noodles::cram::io::indexed_reader::Builder::default().build_from_path(path) {
+        } else if ext == "cram"
+            && let Ok(mut reader) = noodles::cram::io::indexed_reader::Builder::default().build_from_path(path) {
                 let _ = reader.read_file_definition();
-                if let Ok(header) = reader.read_file_header() {
-                    if let Ok(query_iter) = reader.query(&header, &region) {
-                        for result in query_iter {
-                            if let Ok(record) = result {
-                                let _ = process_record(
-                                    &record, rmdup, binsize, &mut thread_counts, &mut larp, &mut larp2,
-                                    &mut thread_mapped, &mut thread_unmapped, &mut thread_no_coord,
-                                    &mut thread_filter_rmdup, &mut thread_filter_mapq, &mut thread_pre_retro,
-                                    &mut thread_pair_fail
-                                );
-                            }
+                if let Ok(header) = reader.read_file_header()
+                    && let Ok(query_iter) = reader.query(&header, &region) {
+                        for record in query_iter.flatten() {
+                            let _ = process_record(
+                                &record, rmdup, binsize, &mut thread_counts, &mut larp, &mut larp2,
+                                &mut thread_mapped, &mut thread_unmapped, &mut thread_no_coord,
+                                &mut thread_filter_rmdup, &mut thread_filter_mapq, &mut thread_pre_retro,
+                                &mut thread_pair_fail
+                            );
                         }
                     }
                 }
-            }
-        }
 
         for &count in &thread_counts {
             thread_post_retro += count as usize;

@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 noodles = { version = "0.86.0", features = ["bam", "cram", "sam", "bgzf", "fasta", "core"] }
-numpy = "0.22"
-pyo3 = { version = "0.22", features = ["extension-module"] }
+numpy = "0.28.0"
+pyo3 = { version = "0.28.3", features = ["extension-module"] }
 anyhow = "1.0"
 rayon = "1.11.0"
