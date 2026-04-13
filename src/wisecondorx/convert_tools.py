@@ -142,7 +142,7 @@ def wcx_convert(
     np.savez_compressed(
         Path(f"{prefix}.npz"),
         binsize=binsize,
-        reads_per_bin=reads_per_chromosome_bin,
+        sample=reads_per_chromosome_bin,
         quality=qual_info,
     )
 
