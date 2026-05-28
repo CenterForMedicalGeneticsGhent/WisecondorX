@@ -26,6 +26,11 @@ gender <- input$ref_gender
 alpha <- as.numeric(input$alpha)
 binsize <- as.numeric(input$binsize)
 out.file <- as.character(input$outfile)
+nperm <- if (is.null(input$cbs_nperm)) 10000 else as.numeric(input$cbs_nperm)
+min.width <- if (is.null(input$cbs_min_width)) 2 else as.numeric(input$cbs_min_width)
+undo.splits <- if (is.null(input$cbs_undo_splits)) "none" else as.character(input$cbs_undo_splits)
+undo.SD <- if (is.null(input$cbs_undo_sd)) 3 else as.numeric(input$cbs_undo_sd)
+cbs.smooth <- if (is.null(input$cbs_smooth)) FALSE else as.logical(input$cbs_smooth)
 
 if (gender == "M"){
     chrs = 1:24
@@ -39,7 +44,7 @@ bins.per.chr <- sapply(chrs, FUN = function(x) length(unlist(input$results_r[x])
 chr.end.pos <- c(0,cumsum(bins.per.chr))
 
 ratio[ratio == 0] = NA # blacklist
-weights[weights == 0] = 1^-99 # omit DNAcopy weirdness -- weight cannot be NA or 0
+weights[!is.finite(weights) | weights <= 0] = .Machine$double.xmin
 
 for.cbs <- as.data.frame(ratio)
 chr.rep <- c()
@@ -68,9 +73,23 @@ if (!(is.na(seed) || seed == '')) {
   set.seed(seed)
 }
 CNA.object <- CNA(for.cbs$y, for.cbs$chromosome, for.cbs$x, data.type = "logratio", sampleid = "X")
+if (isTRUE(cbs.smooth)) {
+  CNA.object <- smooth.CNA(CNA.object)
+}
 f = file()
 sink(file=f) ## silence output
-CNA.object <- invisible(segment(CNA.object, alpha = as.numeric(alpha), verbose=1, weights=weights[cbs.mask])$output)
+CNA.object <- invisible(
+  segment(
+    CNA.object,
+    alpha = as.numeric(alpha),
+    nperm = as.numeric(nperm),
+    min.width = as.numeric(min.width),
+    undo.splits = as.character(undo.splits),
+    undo.SD = as.numeric(undo.SD),
+    verbose = 1,
+    weights = weights[cbs.mask]
+  )$output
+)
 sink() ## undo silencing
 close(f)
 

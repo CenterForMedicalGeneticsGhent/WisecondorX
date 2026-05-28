@@ -11,11 +11,6 @@ import numpy as np
 import pandas as pd
 from enum import Enum
 
-"""
-Scales the bin size of a sample.npz to the one  
-requested for the reference
-"""
-
 
 class Sex(Enum):
     MALE = "M"
@@ -24,6 +19,10 @@ class Sex(Enum):
 
 
 def scale_sample(sample, from_size, to_size):
+    """
+    Scales the bin size of a sample.npz to the one
+    requested for the reference
+    """
     if not to_size or from_size == to_size:
         return sample
 
@@ -109,8 +108,8 @@ def get_z_score(results_c, results):
     )
     zs = []
     for segment in results_c:
-        segment_nr = results_nr[segment[0]][segment[1] : segment[2]]
-        segment_rr = results_r[segment[0]][segment[1] : segment[2]]
+        segment_nr = results_nr[segment[0]][segment[1] : segment[2] + 1]
+        segment_rr = results_r[segment[0]][segment[1] : segment[2] + 1]
         segment_nr = [
             segment_nr[i] for i in range(len(segment_nr)) if segment_rr[i] != 0
         ]
@@ -118,7 +117,7 @@ def get_z_score(results_c, results):
             for ii in range(len(segment_nr[i])):
                 if not np.isfinite(segment_nr[i][ii]):
                     segment_nr[i][ii] = np.nan
-        segment_w = results_w[segment[0]][segment[1] : segment[2]]
+        segment_w = results_w[segment[0]][segment[1] : segment[2] + 1]
         segment_w = [
             segment_w[i] for i in range(len(segment_w)) if segment_rr[i] != 0
         ]
@@ -147,7 +146,9 @@ Returns MSV, measure for sample-wise noise.
 def get_median_segment_variance(results_c, results_r):
     vars = []
     for segment in results_c:
-        segment_r = results_r[segment[0]][int(segment[1]) : int(segment[2])]
+        segment_r = results_r[segment[0]][
+            int(segment[1]) : int(segment[2]) + 1
+        ]
         segment_r = [x for x in segment_r if x != 0]
         if segment_r:
             var = np.var(segment_r)

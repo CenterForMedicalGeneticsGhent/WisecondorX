@@ -253,6 +253,41 @@ def wcx_predict(
             help="p-value cut-off for calling a CBS breakpoint.",
         ),
     ] = 1e-4,
+    cbs_nperm: Annotated[
+        int,
+        typer.Option(
+            "--cbs-nperm",
+            help="Number of permutations used by CBS.",
+            min=1,
+        ),
+    ] = 10000,
+    cbs_min_width: Annotated[
+        int,
+        typer.Option(
+            "--cbs-min-width",
+            help="Minimum markers for a CBS changed segment (2-5).",
+            min=2,
+            max=5,
+        ),
+    ] = 2,
+    cbs_undo_splits: str = typer.Option(
+        "none",
+        "--cbs-undo-splits",
+        help="Undo CBS splits using one of: none, prune, sdundo.",
+    ),
+    cbs_undo_sd: Annotated[
+        float,
+        typer.Option(
+            "--cbs-undo-sd",
+            help="SD cutoff used when --cbs-undo-splits=sdundo.",
+            min=0.0,
+        ),
+    ] = 3.0,
+    cbs_smooth: bool = typer.Option(
+        False,
+        "--cbs-smooth",
+        help="Apply DNAcopy smooth.CNA before segmentation.",
+    ),
     zscore: Annotated[
         float,
         typer.Option(help="z-score cut-off for aberration calling.", min=0.0),
@@ -315,6 +350,11 @@ def wcx_predict(
     args.minrefbins = minrefbins
     args.maskrepeats = maskrepeats
     args.alpha = alpha
+    args.cbs_nperm = cbs_nperm
+    args.cbs_min_width = cbs_min_width
+    args.cbs_undo_splits = cbs_undo_splits
+    args.cbs_undo_sd = cbs_undo_sd
+    args.cbs_smooth = cbs_smooth
     args.zscore = zscore
     args.beta = beta
     args.blacklist = blacklist
@@ -353,6 +393,12 @@ def wcx_predict(
         )
         sys.exit()
 
+    if args.cbs_undo_splits not in {"none", "prune", "sdundo"}:
+        logging.critical(
+            "Parameter --cbs-undo-splits should be one of: none, prune, sdundo"
+        )
+        sys.exit()
+
     logging.info("Importing data ...")
     ref_file = np.load(args.reference, encoding="latin1", allow_pickle=True)
     sample_file = np.load(args.infile, encoding="latin1", allow_pickle=True)
@@ -364,12 +410,12 @@ def wcx_predict(
         sample, int(sample_file["binsize"].item()), int(ref_file["binsize"])
     )
 
-    gender = predict_gender(sample, ref_file["trained_cutoff"])
+    gender = Sex(predict_gender(sample, ref_file["trained_cutoff"]))
     if not ref_file["is_nipt"]:
         if args.gender:
             gender = args.gender
         sample = gender_correct(sample, gender)
-        ref_gender = gender
+        ref_gender = gender.value
     else:
         if args.gender:
             gender = args.gender
@@ -382,7 +428,7 @@ def wcx_predict(
     )
 
     if not ref_file["is_nipt"]:
-        if not ref_file["has_male"] and gender == "M":
+        if not ref_file["has_male"] and gender == Sex.MALE:
             logging.warning(
                 "This sample is male, whilst the reference is created with fewer than 5 males. "
                 "The female gonosomal reference will be used for X predictions. Note that these might "
@@ -391,7 +437,7 @@ def wcx_predict(
             )
             ref_gender = "F"
 
-        elif not ref_file["has_female"] and gender == "F":
+        elif not ref_file["has_female"] and gender == Sex.FEMALE:
             logging.warning(
                 "This sample is female, whilst the reference is created with fewer than 5 females. "
                 "The male gonosomal reference will be used for XY predictions. Note that these might "
