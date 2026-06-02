@@ -28,6 +28,7 @@ ratios <- as.numeric(unlist(input$ratios))
 weights <- as.numeric(unlist(input$weights))
 
 # Extract configuration values from command-line arguments
+id <- get_arg("--id","sample")
 seed <- as.numeric(get_arg("--seed", NA))
 sex <- get_arg("--ref_sex")
 alpha <- as.numeric(get_arg("--alpha", 0.001))
@@ -102,7 +103,7 @@ if (!(is.na(seed) || seed == '')) {
   set.seed(seed)
 }
 # Construct a Copy Number Array (CNA) object, defining the logratio values, chromosome labels, and local coordinate positions
-CNA.object <- CNA(for.cbs$y, for.cbs$chromosome, for.cbs$x, data.type = "logratio", sampleid = "X")
+CNA.object <- CNA(for.cbs$y, for.cbs$chromosome, for.cbs$x, data.type = "logratio", sampleid = id)
 # Smooth the CNA data to detect and adjust single-point outliers if cbs.smooth is enabled
 if (isTRUE(cbs.smooth)) {
   CNA.object <- smooth.CNA(CNA.object)

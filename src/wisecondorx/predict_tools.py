@@ -279,6 +279,8 @@ def exec_cbs(rem_input, results):
             str(cbs_input),
             "--outfile",
             str(cbs_output),
+            "--id",
+            str(os.path.basename(rem_input["args"].outid)),
             "--ref_sex",
             str(rem_input["ref_gender"]),
             "--alpha",
