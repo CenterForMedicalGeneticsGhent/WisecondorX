@@ -50,12 +50,11 @@ def scale_sample(sample, from_size, to_size):
     return return_sample
 
 
-"""
-Levels gonosomal reads with the one at the autosomes.
-"""
-
-
 def gender_correct(sample, gender):
+    """
+    Levels gonosomal reads with the one at the autosomes.
+    """
+
     if gender == "M":
         sample["23"] = sample["23"] * 2
         sample["24"] = sample["24"] * 2
@@ -104,12 +103,10 @@ def get_z_score(results_c, results):
     return zs
 
 
-"""
-Returns MSV, measure for sample-wise noise.
-"""
-
-
 def get_median_segment_variance(results_c, results_r):
+    """
+    Returns MSV, measure for sample-wise noise.
+    """
     vars = []
     for segment in results_c:
         segment_r = results_r[segment[0]][
@@ -120,16 +117,3 @@ def get_median_segment_variance(results_c, results_r):
             var = np.var(segment_r)
             vars.append(var)
     return np.median(vars)
-
-
-"""
-Returns CPA, measure for sample-wise abnormality.
-"""
-
-
-def get_cpa(results_c, binsize):
-    x = 0
-    for segment in results_c:
-        x += (segment[2] - segment[1] + 1) * binsize * abs(segment[3])
-    CPA = x / len(results_c) * (10**-8)
-    return CPA
