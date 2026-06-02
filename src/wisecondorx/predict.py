@@ -937,8 +937,10 @@ def _generate_chr_statistics_file(rem_input, results):
 
         stats_file.write(
             "Gender based on --yfrac (or manually overridden by --gender): {}\n".format(
-                str(rem_input["gender"])
-            )
+            "Gender source: {}\n".format(
+                "manually overridden (--gender)"
+                if rem_input["args"].gender is not None
+                else "inferred from --yfrac"
         )
 
         stats_file.write("Number of reads: {}\n".format(str(rem_input["n_reads"])))
