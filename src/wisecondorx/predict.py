@@ -734,33 +734,32 @@ def generate_output_tables(rem_input, results):
 
 
 def _generate_bins_bed(rem_input, results):
-    bins_file = open("{}_bins.bed".format(rem_input["args"].outid), "w")
-    bins_file.write("chr\tstart\tend\tid\tratio\tzscore\n")
-    results_r = results["results_r"]
-    results_z = results["results_z"]
-    binsize = rem_input["binsize"]
+    with open("{}_bins.bed".format(rem_input["args"].outid), "w") as bins_file:
+        bins_file.write("chr\tstart\tend\tid\tratio\tzscore\n")
+        results_r = results["results_r"]
+        results_z = results["results_z"]
+        binsize = rem_input["binsize"]
 
-    for chr in range(len(results_r)):
-        chr_name = str(chr + 1)
-        if chr_name == "23":
-            chr_name = "X"
-        if chr_name == "24":
-            chr_name = "Y"
-        feat = 1
-        for i in range(len(results_r[chr])):
-            r = results_r[chr][i]
-            z = results_z[chr][i]
-            if r == 0:
-                r = "nan"
-            if z == 0:
-                z = "nan"
-            feat_str = "{}:{}-{}".format(
-                chr_name, str(feat), str(feat + binsize - 1)
-            )
-            row = [chr_name, feat, feat + binsize - 1, feat_str, r, z]
-            bins_file.write("{}\n".format("\t".join([str(x) for x in row])))
-            feat += binsize
-    bins_file.close()
+        for chr in range(len(results_r)):
+            chr_name = str(chr + 1)
+            if chr_name == "23":
+                chr_name = "X"
+            if chr_name == "24":
+                chr_name = "Y"
+            feat = 1
+            for i in range(len(results_r[chr])):
+                r = results_r[chr][i]
+                z = results_z[chr][i]
+                if r == 0:
+                    r = "nan"
+                if z == 0:
+                    z = "nan"
+                feat_str = "{}:{}-{}".format(
+                    chr_name, str(feat), str(feat + binsize - 1)
+                )
+                row = [chr_name, feat, feat + binsize - 1, feat_str, r, z]
+                bins_file.write("{}\n".format("\t".join([str(x) for x in row])))
+                feat += binsize
 
 
 def _generate_regions_bed(rem_input, results):
