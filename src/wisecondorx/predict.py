@@ -764,26 +764,26 @@ def _generate_bins_bed(rem_input, results):
 
 
 def _generate_regions_bed(rem_input, results):
-    regions_file = open("{}_regions.bed".format(rem_input["args"].outid), "w")
-    regions_file.write("chr\tstart\tend\tname\tratio\tzscore\n")
+    with open("{}_regions.bed".format(rem_input["args"].outid), "w") as regions_file:
+        regions_file.write("chr\tstart\tend\tname\tratio\tzscore\n")
 
-    with open(rem_input["args"].regions, "r") as regions_file_handle:
-        regions = [
-            line.strip().split("\t")
-            for line in regions_file_handle
-            if line.strip() != ""
-        ]
+        with open(rem_input["args"].regions, "r") as regions_file_handle:
+            regions = [
+                line.strip().split("\t")
+                for line in regions_file_handle
+                if line.strip() != ""
+            ]
 
-        for region in regions:
-            assert len(region) >= 4, (
-                "Regions file must have at least 4 columns: chr, start, end, name"
-            )
-            chr_name, start, end, name = (
-                region[0],
-                region[1],
-                region[2],
-                region[3],
-            )
+            for region in regions:
+                assert len(region) >= 4, (
+                    "Regions file must have at least 4 columns: chr, start, end, name"
+                )
+                chr_name, start, end, name = (
+                    region[0],
+                    region[1],
+                    region[2],
+                    region[3],
+                )
 
             # Convert chromosome name to zero-based index
             if chr_name == "chrX" or chr_name == "X":
@@ -827,7 +827,6 @@ def _generate_regions_bed(rem_input, results):
             row = [chr_name, start, end, name, ratio_mean, zscore_mean]
             regions_file.write("{}\n".format("\t".join([str(x) for x in row])))
 
-    regions_file.close()
 
 
 def _generate_segments_and_aberrations_bed(rem_input, results):
