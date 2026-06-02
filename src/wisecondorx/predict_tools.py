@@ -4,8 +4,14 @@ import os
 
 import numpy as np
 from scipy.stats import norm
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import logging
+import json
+import subprocess
+import sys
 
-from wisecondorx.overall_tools import exec_R, get_z_score
+from wisecondorx.overall_tools import get_z_score
 
 """
 Returns gender based on Gaussian mixture
@@ -252,26 +258,57 @@ Calculates segmental zz-scores.
 
 
 def exec_cbs(rem_input, results):
-    json_cbs_dir = os.path.abspath(rem_input["args"].outid + "_CBS_tmp")
+    script_path = Path(__file__).parent / "include" / "CBS.R"
+    results_c = []
+    with TemporaryDirectory() as tmpdir:
+        cbs_input = Path(tmpdir) / "cbs_input.json"
+        cbs_output = Path(tmpdir) / "cbs_output.json"
 
-    json_dict = {
-        "R_script": str("{}/include/CBS.R".format(rem_input["wd"])),
-        "ref_gender": str(rem_input["ref_gender"]),
-        "alpha": str(rem_input["args"].alpha),
-        "cbs_nperm": int(rem_input["args"].cbs_nperm),
-        "cbs_min_width": int(rem_input["args"].cbs_min_width),
-        "cbs_undo_splits": str(rem_input["args"].cbs_undo_splits),
-        "cbs_undo_sd": float(rem_input["args"].cbs_undo_sd),
-        "cbs_smooth": bool(rem_input["args"].cbs_smooth),
-        "binsize": str(rem_input["binsize"]),
-        "seed": str(rem_input["args"].seed),
-        "results_r": results["results_r"],
-        "results_w": results["results_w"],
-        "infile": str("{}_01.json".format(json_cbs_dir)),
-        "outfile": str("{}_02.json".format(json_cbs_dir)),
-    }
+        json.dump(
+            {
+                "ratios": results["results_r"],
+                "weights": results["results_w"],
+            },
+            cbs_input.open("w"),
+            indent=4,
+        )
+        r_cmd = [
+            "Rscript",
+            str(script_path),
+            "--infile",
+            str(cbs_input),
+            "--outfile",
+            str(cbs_output),
+            "--ref_sex",
+            str(rem_input["ref_gender"]),
+            "--alpha",
+            str(rem_input["args"].alpha),
+            "--cbs_nperm",
+            str(rem_input["args"].cbs_nperm),
+            "--cbs_min_width",
+            str(rem_input["args"].cbs_min_width),
+            "--cbs_undo_splits",
+            str(rem_input["args"].cbs_undo_splits),
+            "--cbs_undo_sd",
+            str(rem_input["args"].cbs_undo_sd),
+            "--cbs_smooth",
+            str(rem_input["args"].cbs_smooth).upper(),
+            "--binsize",
+            str(rem_input["binsize"]),
+            "--seed",
+            str(rem_input["args"].seed),
+        ]
+        logging.debug("CBS cmd: {}".format(r_cmd))
 
-    results_c = _get_processed_cbs(exec_R(json_dict))
+        try:
+            subprocess.check_call(r_cmd)
+            with cbs_output.open("r") as f:
+                results_c = _get_processed_cbs(json.load(f))
+        except subprocess.CalledProcessError as e:
+            logging.critical(f"Rscript failed: {e}")
+            cbs_input.rename(os.getcwd() + "/cbs_input.json")
+            sys.exit(1)
+
     segment_z = get_z_score(results_c, results)
     results_c = [
         results_c[i][:3] + [segment_z[i]] + [results_c[i][3]]

@@ -76,6 +76,45 @@ class TestPredictContract(unittest.TestCase):
             sum(x != 0 for x in inflated), int(np.sum(rem_input["mask"]))
         )
 
+    def test_exec_cbs(self):
+        from wisecondorx.predict_tools import exec_cbs
+
+        class Args:
+            alpha = 1e-4
+            cbs_nperm = 100
+            cbs_min_width = 2
+            cbs_undo_splits = "none"
+            cbs_undo_sd = 3.0
+            cbs_smooth = False
+            seed = 42
+
+        # 24 chromosomes for male, 5 bins per chromosome to have enough data
+        bins_per_chr = [5] * 24
+        results = {
+            "results_r": [
+                np.random.normal(0, 0.1, 5).tolist() for _ in bins_per_chr
+            ],
+            "results_w": [[1.0] * 5 for _ in bins_per_chr],
+            "results_nr": [
+                [[0.0] * 10 for _ in range(5)] for _ in bins_per_chr
+            ],
+        }
+
+        rem_input = {
+            "args": Args(),
+            "binsize": 100000,
+            "ref_gender": "M",
+            "gender": "M",
+            "bins_per_chr": bins_per_chr,
+            "masked_bins_per_chr": bins_per_chr,
+            "masked_bins_per_chr_cum": np.cumsum(bins_per_chr).tolist(),
+        }
+
+        res = exec_cbs(rem_input, results)
+        self.assertIsInstance(res, list)
+        for segment in res:
+            self.assertEqual(len(segment), 5)  # [chr, s, e, z, r]
+
 
 if __name__ == "__main__":
     unittest.main()
