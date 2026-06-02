@@ -897,76 +897,74 @@ def __get_aberration_cutoff(beta, ploidy):
 
 
 def _generate_chr_statistics_file(rem_input, results):
-    stats_file = open("{}_statistics.txt".format(rem_input["args"].outid), "w")
-    stats_file.write("chr\tratio.mean\tratio.median\tzscore\n")
-    chr_ratio_means = [
-        np.ma.average(
-            results["results_r"][chr], weights=results["results_w"][chr]
-        )
-        for chr in range(len(results["results_r"]))
-    ]
-    chr_ratio_medians = [
-        np.median([x for x in results["results_r"][chr] if x != 0])
-        for chr in range(len(results["results_r"]))
-    ]
-
-    results_c_chr = [
-        [x, 0, rem_input["bins_per_chr"][x] - 1, chr_ratio_means[x]]
-        for x in range(len(results["results_r"]))
-    ]
-
-    msv = round(
-        get_median_segment_variance(
-            results["results_c"], results["results_r"]
-        ),
-        5,
-    )
-    cpa = round(_get_cpa(results["results_c"], rem_input["binsize"]), 5)
-    chr_z_scores = get_z_score(results_c_chr, results)
-
-    for chr in range(len(results["results_r"])):
-        chr_name = str(chr + 1)
-        if chr_name == "23":
-            chr_name = "X"
-        if chr_name == "24":
-            chr_name = "Y"
-
-        row = [
-            chr_name,
-            chr_ratio_means[chr],
-            chr_ratio_medians[chr],
-            chr_z_scores[chr],
+    with open("{}_statistics.txt".format(rem_input["args"].outid), "w") as stats_file:
+        stats_file.write("chr\tratio.mean\tratio.median\tzscore\n")
+        chr_ratio_means = [
+            np.ma.average(
+                results["results_r"][chr], weights=results["results_w"][chr]
+            )
+            for chr in range(len(results["results_r"]))
+        ]
+        chr_ratio_medians = [
+            np.median([x for x in results["results_r"][chr] if x != 0])
+            for chr in range(len(results["results_r"]))
         ]
 
-        stats_file.write("\t".join([str(x) for x in row]) + "\n")
+        results_c_chr = [
+            [x, 0, rem_input["bins_per_chr"][x] - 1, chr_ratio_means[x]]
+            for x in range(len(results["results_r"]))
+        ]
 
-    stats_file.write(
-        "Gender based on --yfrac (or manually overridden by --gender): {}\n".format(
-            str(rem_input["gender"])
+        msv = round(
+            get_median_segment_variance(
+                results["results_c"], results["results_r"]
+            ),
+            5,
         )
-    )
+        cpa = round(_get_cpa(results["results_c"], rem_input["binsize"]), 5)
+        chr_z_scores = get_z_score(results_c_chr, results)
 
-    stats_file.write("Number of reads: {}\n".format(str(rem_input["n_reads"])))
+        for chr in range(len(results["results_r"])):
+            chr_name = str(chr + 1)
+            if chr_name == "23":
+                chr_name = "X"
+            if chr_name == "24":
+                chr_name = "Y"
 
-    stats_file.write(
-        "Standard deviation of the ratios per chromosome: {}\n".format(
-            str(round(float(np.nanstd(chr_ratio_means)), 5))
+            row = [
+                chr_name,
+                chr_ratio_means[chr],
+                chr_ratio_medians[chr],
+                chr_z_scores[chr],
+            ]
+
+            stats_file.write("\t".join([str(x) for x in row]) + "\n")
+
+        stats_file.write(
+            "Gender based on --yfrac (or manually overridden by --gender): {}\n".format(
+                str(rem_input["gender"])
+            )
         )
-    )
 
-    stats_file.write(
-        "Median segment variance per bin (doi: 10.1093/nar/gky1263): {}\n".format(
-            str(msv)
+        stats_file.write("Number of reads: {}\n".format(str(rem_input["n_reads"])))
+
+        stats_file.write(
+            "Standard deviation of the ratios per chromosome: {}\n".format(
+                str(round(float(np.nanstd(chr_ratio_means)), 5))
+            )
         )
-    )
 
-    stats_file.write(
-        "Copy number profile abnormality (CPA) score (doi: 10.1186/s13073-020-00735-4): {}\n".format(
-            str(cpa)
+        stats_file.write(
+            "Median segment variance per bin (doi: 10.1093/nar/gky1263): {}\n".format(
+                str(msv)
+            )
         )
-    )
 
-    stats_file.close()
+        stats_file.write(
+            "Copy number profile abnormality (CPA) score (doi: 10.1186/s13073-020-00735-4): {}\n".format(
+                str(cpa)
+            )
+        )
 
 
 def _get_cpa(results_c, binsize):
