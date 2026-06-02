@@ -830,64 +830,60 @@ def _generate_regions_bed(rem_input, results):
 
 
 def _generate_segments_and_aberrations_bed(rem_input, results):
-    segments_file = open(
+    with open(
         "{}_segments.bed".format(rem_input["args"].outid), "w"
-    )
-    aberrations_file = open(
+    ) as segments_file, open(
         "{}_aberrations.bed".format(rem_input["args"].outid), "w"
-    )
-    segments_file.write("chr\tstart\tend\tratio\tzscore\n")
-    aberrations_file.write("chr\tstart\tend\tratio\tzscore\ttype\n")
+    ) as aberrations_file:
+        segments_file.write("chr\tstart\tend\tratio\tzscore\n")
+        aberrations_file.write("chr\tstart\tend\tratio\tzscore\ttype\n")
 
-    for segment in results["results_c"]:
-        chr_name = str(segment[0] + 1)
-        if chr_name == "23":
-            chr_name = "X"
-        if chr_name == "24":
-            chr_name = "Y"
-        row = [
-            chr_name,
-            int(segment[1] * rem_input["binsize"] + 1),
-            int(segment[2] * rem_input["binsize"]),
-            segment[4],
-            segment[3],
-        ]
-        segments_file.write("{}\n".format("\t".join([str(x) for x in row])))
+        for segment in results["results_c"]:
+            chr_name = str(segment[0] + 1)
+            if chr_name == "23":
+                chr_name = "X"
+            if chr_name == "24":
+                chr_name = "Y"
+            row = [
+                chr_name,
+                int(segment[1] * rem_input["binsize"] + 1),
+                int(segment[2] * rem_input["binsize"]),
+                segment[4],
+                segment[3],
+            ]
+            segments_file.write("{}\n".format("\t".join([str(x) for x in row])))
 
-        ploidy = 2
-        if (chr_name == "X" or chr_name == "Y") and rem_input[
-            "ref_gender"
-        ] == "M":
-            ploidy = 1
-        if rem_input["args"].beta is not None:
-            if (
-                float(segment[4])
-                > __get_aberration_cutoff(rem_input["args"].beta, ploidy)[1]
-            ):
-                aberrations_file.write(
-                    "{}\tgain\n".format("\t".join([str(x) for x in row]))
-                )
-            elif (
-                float(segment[4])
-                < __get_aberration_cutoff(rem_input["args"].beta, ploidy)[0]
-            ):
-                aberrations_file.write(
-                    "{}\tloss\n".format("\t".join([str(x) for x in row]))
-                )
-        elif isinstance(segment[3], str):
-            continue
-        else:
-            if float(segment[3]) > rem_input["args"].zscore:
-                aberrations_file.write(
-                    "{}\tgain\n".format("\t".join([str(x) for x in row]))
-                )
-            elif float(segment[3]) < -rem_input["args"].zscore:
-                aberrations_file.write(
-                    "{}\tloss\n".format("\t".join([str(x) for x in row]))
-                )
-
-    segments_file.close()
-    aberrations_file.close()
+            ploidy = 2
+            if (chr_name == "X" or chr_name == "Y") and rem_input[
+                "ref_gender"
+            ] == "M":
+                ploidy = 1
+            if rem_input["args"].beta is not None:
+                if (
+                    float(segment[4])
+                    > __get_aberration_cutoff(rem_input["args"].beta, ploidy)[1]
+                ):
+                    aberrations_file.write(
+                        "{}\tgain\n".format("\t".join([str(x) for x in row]))
+                    )
+                elif (
+                    float(segment[4])
+                    < __get_aberration_cutoff(rem_input["args"].beta, ploidy)[0]
+                ):
+                    aberrations_file.write(
+                        "{}\tloss\n".format("\t".join([str(x) for x in row]))
+                    )
+            elif isinstance(segment[3], str):
+                continue
+            else:
+                if float(segment[3]) > rem_input["args"].zscore:
+                    aberrations_file.write(
+                        "{}\tgain\n".format("\t".join([str(x) for x in row]))
+                    )
+                elif float(segment[3]) < -rem_input["args"].zscore:
+                    aberrations_file.write(
+                        "{}\tloss\n".format("\t".join([str(x) for x in row]))
+                    )
 
 
 def __get_aberration_cutoff(beta, ploidy):
