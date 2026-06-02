@@ -9,7 +9,7 @@ wisecondorx.egg-info/
 /build/
 /dist/
 **.pyc
-
+debug/
 .coverage
 .mypy_cache/
 .pytest_cache/
