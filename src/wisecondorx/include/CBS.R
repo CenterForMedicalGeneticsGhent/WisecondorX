@@ -29,7 +29,7 @@ weights <- as.numeric(unlist(input$weights))
 
 # Extract configuration values from command-line arguments
 id <- get_arg("--id","sample")
-seed <- as.numeric(get_arg("--seed", NA))
+seed <- as.numeric(get_arg("--seed", 42))
 sex <- get_arg("--ref_sex")
 alpha <- as.numeric(get_arg("--alpha", 0.001))
 binsize <- as.numeric(get_arg("--binsize", 100000))

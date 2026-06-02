@@ -17,7 +17,6 @@ from wisecondorx.newref_control import (
 )
 from wisecondorx.newref_tools import train_gender_model, get_mask
 from wisecondorx.overall_tools import gender_correct, scale_sample, Sex
-from wisecondorx.predict_control import normalize, get_post_processed_result
 from wisecondorx.predict_output import generate_output_tables
 from wisecondorx.plotter import write_plots
 from wisecondorx.predict_tools import (
@@ -25,6 +24,8 @@ from wisecondorx.predict_tools import (
     exec_cbs,
     apply_blacklist,
     predict_gender,
+    normalize,
+    get_post_processed_result,
 )
 from wisecondorx.ref_qc import qc_reference
 
