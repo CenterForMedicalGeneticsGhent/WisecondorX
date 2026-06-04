@@ -1,11 +1,16 @@
 # WisecondorX
 
+import json
+import logging
 import os
+import sys
 
 import numpy as np
 from scipy.stats import norm
-
-from wisecondorx.overall_tools import exec_R, get_z_score
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import subprocess
+from wisecondorx.overall_tools import get_z_score
 
 """
 Returns gender based on Gaussian mixture
@@ -245,43 +250,106 @@ def _import_bed(rem_input):
     return bed
 
 
-"""
-Executed CBS on results_r using results_w as weights.
-Calculates segmental zz-scores.
-"""
-
-
 def exec_cbs(rem_input, results):
-    json_cbs_dir = os.path.abspath(rem_input["args"].outid + "_CBS_tmp")
+    """
+    Executed CBS on results_r using results_w as weights.
+    Calculates segmental zz-scores.
+    """
 
-    json_dict = {
-        "R_script": str("{}/include/CBS.R".format(rem_input["wd"])),
-        "ref_gender": str(rem_input["ref_gender"]),
-        "alpha": str(rem_input["args"].alpha),
-        "binsize": str(rem_input["binsize"]),
-        "seed": str(rem_input["args"].seed),
-        "results_r": results["results_r"],
-        "results_w": results["results_w"],
-        "infile": str("{}_01.json".format(json_cbs_dir)),
-        "outfile": str("{}_02.json".format(json_cbs_dir)),
-    }
+    # script params
+    script_path = Path(__file__).parent / "include" / "CBS.R"
+    sample_id = getattr(rem_input["args"], "outid", "sample")
 
-    results_c = _get_processed_cbs(exec_R(json_dict))
+    # prepare vectors for R script
+    # chrom_vec     :  [Integer Vector]  -> e.g., 1, 1, 1, 2, 2, 3...
+    # maploc_vec    :  [Numeric Vector]  -> e.g., 1000, 2000, 3000, 1000, 2000...
+    # genomdat_vec  :  [Numeric Vector]  -> e.g., -0.05, 0.12, -0.44, 0.02...
+    # weights_vec   :  [Numeric Vector]  -> e.g., 0.5, 0.8, 0.3, 0.9, 0.7...
+    maploc_vector = np.concatenate(
+        [np.arange(1, len(chr_data) + 1) for chr_data in results["results_r"]]
+    )
+    chroms_vector = np.repeat(
+        [
+            list(range(1, len(chr_data) + 1))
+            for chr_data in results["results_r"]
+        ],
+        [len(chr_data) for chr_data in results["results_r"]],
+    )
+    ratios_vector = np.concatenate(results["results_r"], axis=0)
+    weights_vector = np.concatenate(results["results_w"], axis=0)
+
+    # Run CBS and process results
+    results_c = []
+    with TemporaryDirectory() as tmpdir:
+        cbs_input = Path(tmpdir) / "cbs_input.json"
+        cbs_output = Path(tmpdir) / "cbs_output.json"
+
+        json.dump(
+            {
+                # input data for CBS
+                "chroms": chroms_vector,
+                "genomdat": ratios_vector,
+                "maploc": maploc_vector,
+                "weights": weights_vector,
+            },
+            cbs_input.open("w"),
+            indent=4,
+        )
+
+        r_cmd = [
+            "Rscript",
+            str(script_path),
+            # IO
+            "--infile",
+            str(cbs_input),
+            "--outfile",
+            str(cbs_output),
+            # CNA
+            "--id",
+            str(os.path.basename(sample_id)),
+            "--seed",
+            str(rem_input["args"].seed),
+            # CBS
+            "--alpha",
+            str(rem_input["args"].alpha),
+            "--nperm",
+            str(rem_input["args"].cbs_nperm),
+            "--p_method",
+            str(rem_input["args"].cbs_p_method),
+            "--min_width",
+            str(rem_input["args"].cbs_min_width),
+            "--kmax",
+            str(rem_input["args"].cbs_kmax),
+            "--nmin",
+            str(rem_input["args"].cbs_nmin),
+            "--eta",
+            str(rem_input["args"].cbs_eta),
+            "--trim",
+            str(rem_input["args"].cbs_trim),
+            "--undo_prune",
+            str(rem_input["args"].cbs_undo_prune),
+            "--undo_splits",
+            str(rem_input["args"].cbs_undo_splits),
+            "--undo_sd",
+            str(rem_input["args"].cbs_undo_sd),
+            # set verbose level based on Python logging level (debug -> 3, else 0)
+            "--verbose",
+            "3" if logging.getLogger().getEffectiveLevel() == 10 else "0",
+        ]
+        logging.debug("CBS cmd: {}".format(r_cmd))
+
+        try:
+            subprocess.check_call(r_cmd)
+            with cbs_output.open("r") as f:
+                results_c = json.load(f)
+        except subprocess.CalledProcessError as e:
+            logging.critical(f"Rscript failed: {e}")
+            cbs_input.rename(os.getcwd() + "/cbs_input.json")
+            sys.exit(1)
+
     segment_z = get_z_score(results_c, results)
     results_c = [
         results_c[i][:3] + [segment_z[i]] + [results_c[i][3]]
         for i in range(len(results_c))
     ]
-    return results_c
-
-
-def _get_processed_cbs(cbs_data):
-    results_c = []
-    for i, segment in enumerate(cbs_data):
-        chr = int(segment["chr"]) - 1
-        s = int(segment["s"])
-        e = int(segment["e"])
-        r = segment["r"]
-        results_c.append([chr, s, e, r])
-
     return results_c
