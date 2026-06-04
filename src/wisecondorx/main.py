@@ -245,7 +245,7 @@ def wcx_predict(
         "--maskrepeats",
         help="Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.",
     ),
-    alpha: Annotated[
+    cbs_alpha: Annotated[
         float,
         typer.Option(
             min=0.0,
@@ -253,6 +253,79 @@ def wcx_predict(
             help="p-value cut-off for calling a CBS breakpoint.",
         ),
     ] = 1e-4,
+    cbs_nperm: Annotated[
+        int,
+        typer.Option(
+            min=0,
+            help="Number of permutations for CBS p-value estimation. Higher is more accurate, but also slower.",
+        ),
+    ] = 10000,
+    cbs_p_method: Annotated[
+        str,
+        typer.Option(
+            "--cbs_p_method",
+            help="Method for CBS p-value estimation. See DNAcopy documentation for more details.",
+        ),
+    ] = "hybrid",
+    cbs_min_width: Annotated[
+        int,
+        typer.Option(
+            "--cbs_min_width",
+            min=2,
+            help="Minimum number of bins in a segment for it to be called by CBS. Higher is more stringent.",
+        ),
+    ] = 2,
+    cbs_kmax: Annotated[
+        int,
+        typer.Option(
+            "--cbs_kmax",
+            min=1,
+            help="Maximum width of smaller segment for permutation in the hybrid method.",
+        ),
+    ] = 25,
+    cbs_nmin: Annotated[
+        int,
+        typer.Option(
+            "--cbs_nmin",
+            min=1,
+            help="the minimum length of data for which the approximation of maximum statistic is used under the hybrid method. should be larger than 4*kmax",
+        ),
+    ] = 200,
+    cbs_eta: Annotated[
+        float,
+        typer.Option(
+            "--cbs_eta",
+            help="the probability to declare a change conditioned on the permuted statistic exceeding the observed statistic exactly j (= 1,...,nperm*alpha) times.",
+        ),
+    ] = 0.05,
+    cbs_trim: Annotated[
+        float,
+        typer.Option(
+            "--cbs_trim",
+            help="proportion of data to be trimmed for variance calculation for smoothing outliers and undoing splits based on SD.",
+        ),
+    ] = 0.025,
+    cbs_undo_splits: Annotated[
+        str,
+        typer.Option(
+            "--cbs_undo_splits",
+            help='A character string specifying how change-points are to be undone, if at all. Default is "none". Other choices are "prune", which uses a sum of squares criterion, and "sdundo", which undoes splits that are not at least this many SDs apart.',
+        ),
+    ] = "none",
+    cbs_undo_prune: Annotated[
+        float,
+        typer.Option(
+            "--cbs_undo_prune",
+            help='the proportional increase in sum of squares allowed when eliminating splits if --cbs_undo_splits="prune".',
+        ),
+    ] = 0.05,
+    cbs_undo_sd: Annotated[
+        float,
+        typer.Option(
+            "--cbs_undo_sd",
+            help='the number of SDs between means to keep a split if --cbs_undo_splits="sdundo".',
+        ),
+    ] = 3.0,
     zscore: Annotated[
         float,
         typer.Option(help="z-score cut-off for aberration calling.", min=0.0),
@@ -294,7 +367,7 @@ def wcx_predict(
         "--add-plot-title",
         help="Add the output name as plot title",
     ),
-    seed: int = typer.Option(
+    cbs_seed: int = typer.Option(
         42, "--seed", help="Seed for segmentation algorithm"
     ),
     regions: Path = typer.Option(
@@ -314,7 +387,18 @@ def wcx_predict(
     args.outid = outid
     args.minrefbins = minrefbins
     args.maskrepeats = maskrepeats
-    args.alpha = alpha
+    args.cbs_seed = cbs_seed
+    args.cbs_alpha = cbs_alpha
+    args.cbs_nperm = cbs_nperm
+    args.cbs_p_method = cbs_p_method
+    args.cbs_min_width = cbs_min_width
+    args.cbs_kmax = cbs_kmax
+    args.cbs_nmin = cbs_nmin
+    args.cbs_eta = cbs_eta
+    args.cbs_trim = cbs_trim
+    args.cbs_undo_prune = cbs_undo_prune
+    args.cbs_undo_splits = cbs_undo_splits
+    args.cbs_undo_sd = cbs_undo_sd
     args.zscore = zscore
     args.beta = beta
     args.blacklist = blacklist
@@ -324,7 +408,6 @@ def wcx_predict(
     args.plot = plot
     args.cairo = cairo
     args.add_plot_title = add_plot_title
-    args.seed = seed
     args.regions = regions
 
     if not args.bed and not args.plot:
@@ -347,9 +430,9 @@ def wcx_predict(
             )
             sys.exit()
 
-    if args.alpha <= 0 or args.alpha > 1:
+    if args.cbs_alpha <= 0 or args.cbs_alpha > 1:
         logging.critical(
-            "Parameter --alpha should be a strictly positive number lower than or equal to 1"
+            "Parameter --cbs_alpha should be a strictly positive number lower than or equal to 1"
         )
         sys.exit()
 
