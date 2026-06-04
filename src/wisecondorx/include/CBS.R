@@ -1,132 +1,90 @@
-# -----
-# arg
-# -----
+#!/usr/bin/env Rscript
 
+# Libraries
+library("DNAcopy")
+library("jsonlite")
+
+# Helper function to get command-line arguments by flag name
+get_arg <- function(flag, default = NULL) {
+  idx <- which(args == flag)
+  if (length(idx) > 0 && idx < length(args)) {
+    return(args[idx + 1])
+  }
+  return(default)
+}
+
+# Parse command-line arguments
 args <- commandArgs(TRUE)
-in.file <- paste0(args[which(args == "--infile")+1])
 
-# -----
-# lib
-# -----
+infile <- get_arg("--infile")
+outfile <- get_arg("--outfile", "cbs_out.json")
+# CNA parameters
+seed <- as.numeric(get_arg("--seed", 42))
+id <- get_arg("--id", "sample")
+# CBS parameters
+alpha <- as.numeric(get_arg("--alpha", 0.001))
+nperm_arg <- get_arg("--cbs_nperm")
+nperm <- if (is.null(nperm_arg) || is.na(nperm_arg)) 10000 else as.numeric(nperm_arg)
+pmethod <- get_arg("--cbs_p_method", "hybrid")
+min_width_arg <- get_arg("--cbs_min_width")
+min_width <- if (is.null(min_width_arg) || is.na(min_width_arg)) 2 else as.numeric(min_width_arg)
+kmax_arg <- get_arg("--cbs_kmax")
+kmax <- if (is.null(kmax_arg) || is.na(kmax_arg)) 25 else as.numeric(kmax_arg)
+nmin_arg <- get_arg("--cbs_nmin")
+nmin <- if (is.null(nmin_arg) || is.na(nmin_arg)) 200 else as.numeric(nmin_arg)
+eta_arg <- get_arg("--cbs_eta")
+eta <- if (is.null(eta_arg) || is.na(eta_arg)) 0.05 else as.numeric(eta_arg)
+trim_arg <- get_arg("--cbs_trim")
+trim <- if (is.null(trim_arg) || is.na(trim_arg)) 0.025 else as.numeric(trim_arg)
+undo_prune_arg <- get_arg("--cbs_undo_prune")
+undo_prune <- if (is.null(undo_prune_arg) || is.na(undo_prune_arg)) 0.05 else as.numeric(undo_prune_arg)
+undo_splits_arg <- get_arg("--cbs_undo_splits")
+undo_splits <- if (is.null(undo_splits_arg) || is.na(undo_splits_arg)) "none" else as.character(undo_splits_arg)
+undo_sd_arg <- get_arg("--cbs_undo_sd")
+undo_sd <- if (is.null(undo_sd_arg) || is.na(undo_sd_arg)) 3 else as.numeric(undo_sd_arg)
+verbose_arg <- get_arg("--cbs_verbose")
+verbosity <- if (is.null(verbose_arg) || is.na(verbose_arg)) 0 else as.numeric(verbose_arg)
 
-suppressMessages(library("DNAcopy"))
-suppressMessages(library("jsonlite"))
-
-# -----
-# main
-# -----
-
-# load input
-
-input <- read_json(in.file)
-ratio <- as.numeric(unlist(input$results_r))
-weights <- as.numeric(unlist(input$results_w))
-seed <- as.numeric(input$seed)
-gender <- input$ref_gender
-alpha <- as.numeric(input$alpha)
-binsize <- as.numeric(input$binsize)
-out.file <- as.character(input$outfile)
-
-if (gender == "M"){
-    chrs = 1:24
-} else {
-    chrs = 1:23
-}
-
-# prepare for CBS
-
-bins.per.chr <- sapply(chrs, FUN = function(x) length(unlist(input$results_r[x])))
-chr.end.pos <- c(0,cumsum(bins.per.chr))
-
-ratio[ratio == 0] = NA # blacklist
-weights[weights == 0] = 1^-99 # omit DNAcopy weirdness -- weight cannot be NA or 0
-
-for.cbs <- as.data.frame(ratio)
-chr.rep <- c()
-chr.rep.2 <- c()
-for (chr in chrs){
-  chr.rep <- c(chr.rep, rep(chr, chr.end.pos[chr + 1] - chr.end.pos[chr]))
-  chr.rep.2 <- c(chr.rep.2, 1:(chr.end.pos[chr + 1] - chr.end.pos[chr]))
-}
-for.cbs$chromosome <- chr.rep; for.cbs$x <- chr.rep.2
-for.cbs <- for.cbs[, c(2,3,1)] ; colnames(for.cbs)[3] <- "y"
-
-# Check for complete NA/chr
-
-cbs.mask <- c()
-for (chr in chrs){
-    check <- which(for.cbs$chromosome == chr)
-    if(!(all(is.na(for.cbs$y[check])))){
-        cbs.mask <- c(cbs.mask, check)
-    }
-}
-for.cbs <- for.cbs[cbs.mask,]
+# Load and pre-process input
+input <- read_json(infile)
+genomedat <- input$genomedat
+chroms <- input$chroms
+maploc <- input$maploc
+weights <- input$weights
 
 # CBS
+set.seed(seed)
+cna_object <- CNA(
+  genomedat,
+  chroms,
+  maploc,
+  data.type = "logratio",
+  sampleid = id,
+  presorted = FALSE
+)
+segments <- segment(
+  cna_object, 
+  weights = weights,
+  alpha = as.numeric(alpha),
+  nperm = nperm,
+  p.method = pmethod,
+  min.width = min_width,
+  kmax=kmax,
+  nmin=nmin,
+  eta=eta,
+  sbdry=NULL,
+  trim = trim,
+  undo.splits = undo_splits,
+  undo.prune = undo_prune,
+  undo.SD = undo_sd,
+  verbose = verbosity,
+)$output
 
-if (!(is.na(seed) || seed == '')) {
-  set.seed(seed)
-}
-CNA.object <- CNA(for.cbs$y, for.cbs$chromosome, for.cbs$x, data.type = "logratio", sampleid = "X")
-f = file()
-sink(file=f) ## silence output
-CNA.object <- invisible(segment(CNA.object, alpha = as.numeric(alpha), verbose=1, weights=weights[cbs.mask])$output)
-sink() ## undo silencing
-close(f)
-
-CNA.object <- CNA.object[,-c(1,5)]
-colnames(CNA.object) <- c("chr", "s", "e", "r")
-
-# Check if segment covers large NA regions. If so = split
-
-new.CNA.object <- data.frame()
-
-for (row.i in 1:nrow(CNA.object)){
-  start.i = CNA.object$s[row.i]
-  end.i = CNA.object$e[row.i]
-  sub.frame = for.cbs[for.cbs$chromosome == CNA.object$chr[row.i], ]
-  segment = sub.frame$y[start.i:end.i]
-  
-  diff.na <- diff(is.na(segment), 1)
-  
-  start.pos <- which(diff.na == 1) + start.i - 1 # all consecutive NAs (start.pos)
-  end.pos <- which(diff.na == -1) + start.i - 1 # all consecutive NAs (end.pos)
-  
-  selection <- end.pos - start.pos > as.integer((binsize / 2000000) ** -1) # 100 kb -> 20 NA stretch: split
-  
-  start.pos <- start.pos[selection]
-  end.pos <- end.pos[selection]
-  
-  inverse.start.pos <- c(start.i, end.pos)
-  inverse.end.pos <- c(start.pos, end.i)
-  
-  selection <- inverse.end.pos - inverse.start.pos > 0 # segments should be at least two in length
-  if (length(which(selection)) == 0){
-      next
-  }
-  inverse.start.pos <- inverse.start.pos[selection]
-  inverse.end.pos <- inverse.end.pos[selection]
-  
-  sub.frame <- cbind(CNA.object$chr[row.i], inverse.start.pos, inverse.end.pos, CNA.object$r[row.i])
-  new.CNA.object <- rbind(new.CNA.object, sub.frame)
-  
-}
-
-colnames(new.CNA.object) <- c("chr", "s", "e", "r")
-CNA.object <- new.CNA.object
-
-# Recalculate segmental ratios
-
-for.cbs$w <- weights[cbs.mask]
-
-for (row.i in 1:nrow(CNA.object)){
-  sub.frame = for.cbs[for.cbs$chromosome == CNA.object$chr[row.i], ]
-  CNA.object$r[row.i] = weighted.mean(sub.frame$y[CNA.object$s[row.i]:CNA.object$e[row.i]],
-                                      sub.frame$w[CNA.object$s[row.i]:CNA.object$e[row.i]],
-                                      na.rm = T)
-}
-
-CNA.object$s <- CNA.object$s - 1 # Make python compliant
-
-# Write output
-write_json(CNA.object, out.file)
+# Export to json
+write_json(
+  segments,
+  path = out.file,
+  dataframe = "rows",
+  pretty = TRUE,
+  auto_unbox = TRUE
+)
