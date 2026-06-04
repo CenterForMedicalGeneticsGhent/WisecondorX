@@ -1,9 +1,6 @@
 # WisecondorX
 
-import json
 import logging
-import os
-import subprocess
 import sys
 import math
 
@@ -65,35 +62,6 @@ def gender_correct(sample, gender):
         sample["24"] = sample["24"] * 2
 
     return sample
-
-
-"""
-Communicates with R. Outputs new json dictionary,
-resulting from R, if 'outfile' is a key in the
-input json. 'infile' and 'R_script' are mandatory keys
-and correspond to the input file required to execute the
-R_script, respectively.
-"""
-
-
-def exec_R(json_dict):
-    json.dump(json_dict, open(json_dict["infile"], "w"))
-
-    r_cmd = ["Rscript", json_dict["R_script"], "--infile", json_dict["infile"]]
-    logging.debug("CBS cmd: {}".format(r_cmd))
-
-    try:
-        subprocess.check_call(r_cmd)
-    except subprocess.CalledProcessError as e:
-        logging.critical("Rscript failed: {}".format(e))
-        sys.exit()
-    if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
-        os.remove(json_dict["infile"])
-    if "outfile" in json_dict.keys():
-        json_out = json.load(open(json_dict["outfile"]))
-        if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
-            os.remove(json_dict["outfile"])
-        return json_out
 
 
 """
