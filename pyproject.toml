@@ -88,9 +88,14 @@ pytest = "*"
 prek = "*"
 ruff = "*"
 
+[tool.pixi.feature.dev.dependencies]
+ipykernel = "*"
+r-irkernel = ">=1.3.2,<2"
+
 [tool.pixi.environments]
 default = { solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
 
 [tool.pixi.tasks]
 lint = { cmd = "ruff check src/"}
