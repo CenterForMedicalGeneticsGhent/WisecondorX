@@ -46,9 +46,9 @@ verbose_arg <- get_arg("--verbose")
 verbosity <- if (is.null(verbose_arg) || is.na(verbose_arg)) 0 else as.numeric(verbose_arg)
 
 # Load and pre-process input
-input <- read_json(infile)
+input <- jsonlite::fromJSON(infile)
 genomedat <- input$genomedat
-chroms <- input$chroms
+chrom <- input$chrom
 maploc <- input$maploc
 weights <- input$weights
 
@@ -61,60 +61,74 @@ cna_object <- CNA(
   # the chromosomes (or other group identifier) from which the markers came. 
   # Vector of length same as the number of rows of genomdat. If one wants the chromosomes to be ordered in the natural order,
   # this variable should be numeric orordered category.
-  chroms,
+  chrom,
   # the locations of marker on the genome. Vector of length same as the number of
   # rows of genomdat. This has to be numeric.
   maploc,
   data.type = "logratio",
   sampleid = id,
-  presorted = FALSE
+  presorted = TRUE
 )
 segments <- segment(
   # an object of class CNA
   cna_object,
+
   # a vector of weights for the probes. The weights should be inversely proportional
   # to their variances. Currently all weights should be positive i.e. remove probes
   # with zero weight prior to segmentation.
   weights = weights,
+
   # significance levels for the test to accept change-points.
-  alpha = as.numeric(alpha),
+  alpha = alpha,
+
   # number of permutations used for p-value computation.
   nperm = nperm,
+
   # method used for p-value computation. For the "perm" method the p-value is
   # based on full permutation. For the "hybrid" method the maximum over the entire
   # region is split into maximum of max over small segments and max over the rest.
   # Approximation is used for the larger segment max. Default is hybrid.
   p.method = pmethod,
+
   # the minimum number of markers for a changed segment. The default is 2 but
   # can be made larger. Maximum possible value is set at 5 since arbitrary widths
   # can have the undesirable effect of incorrect change-points when a true signal of
   # narrow widths exists.
   min.width = min_width,
+
   # the maximum width of smaller segment for permutation in the hybrid method.
   kmax=kmax,
+
   # the minimum length of data for which the approximation of maximum statistic
   # is used under the hybrid method. should be larger than 4*kmax
   nmin=nmin,
+
   # the probability to declare a change conditioned on the permuted statistic exceeding
   # the observed statistic exactly j (= 1,...,nperm*alpha) times.
   eta=eta,
+
   # the sequential boundary used to stop and declare a change. This boundary is a
   # function of nperm, alpha and eta. It can be obtained using the function "getbdry"
   # and used instead of having the "segment" function compute it every time it is
   # called.
   sbdry=NULL,
+
   # proportion of data to be trimmed for variance calculation for smoothing outliers
   # and undoing splits based on SD.
   trim = trim,
+
   # A character string specifying how change-points are to be undone, if at all. De-
   # fault is "none". Other choices are "prune", which uses a sum of squares criterion,
   # and "sdundo", which undoes splits that are not at least this many SDs apart.
   undo.splits = undo_splits,
+
   # the proportional increase in sum of squares allowed when eliminating splits if
   # undo.splits="prune".
   undo.prune = undo_prune,
+
   # the number of SDs between means to keep a split if undo.splits="sdundo".
   undo.SD = undo_sd,
+
   # verbosity level. 0 for no output, 1 for current sample, 2 for current chromosome, 3 for current segment.
   verbose = verbosity,
 )$out
@@ -123,7 +137,7 @@ segments <- segment(
 # Export to json
 write_json(
   segments,
-  path = out.file,
+  path = outfile,
   dataframe = "rows",
   pretty = TRUE,
   auto_unbox = TRUE

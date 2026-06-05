@@ -6,6 +6,7 @@ import os
 import sys
 
 import numpy as np
+import pandas as pd
 from scipy.stats import norm
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -260,23 +261,35 @@ def exec_cbs(rem_input, results):
     script_path = Path(__file__).parent / "include" / "CBS.R"
     sample_id = getattr(rem_input["args"], "outid", "sample")
 
-    # prepare vectors for R script
-    # chrom_vec     :  [Integer Vector]  -> e.g., 1, 1, 1, 2, 2, 3...
-    # maploc_vec    :  [Numeric Vector]  -> e.g., 1000, 2000, 3000, 1000, 2000...
-    # genomdat_vec  :  [Numeric Vector]  -> e.g., -0.05, 0.12, -0.44, 0.02...
-    # weights_vec   :  [Numeric Vector]  -> e.g., 0.5, 0.8, 0.3, 0.9, 0.7...
-    maploc_vector = np.concatenate(
-        [np.arange(1, len(chr_data) + 1) for chr_data in results["results_r"]]
+    # prepare dataframe containing vectors for R script
+    # convert 0 weights to very small numbers to avoid issues with CBS
+    # remove chromosomes with only 0 ratios
+    # chrom     :  [Integer Vector]  -> e.g., 1, 1, 1, 2, 2, 3...
+    # maploc    :  [Numeric Vector]  -> e.g., 1000, 2000, 3000, 1000, 2000...
+    # genomedat  :  [Numeric Vector]  -> e.g., -0.05, 0.12, -0.44, 0.02...
+    # weights   :  [Numeric Vector]  -> e.g., 0.5, 0.8, 0.3, 0.9, 0.7...
+    chrom_names = list(range(1, len(results["results_r"]) + 1))
+    cna_df = (
+        pd.DataFrame(
+            [
+                {
+                    "chrom": chrom,
+                    "maploc": (idx + 1) * rem_input["binsize"],
+                    "genomedat": float(ratio),
+                    "weights": np.nextafter(0, 1)
+                    if weight == 0
+                    else float(weight),
+                }
+                for chrom, ratios, weights in zip(
+                    chrom_names, results["results_r"], results["results_w"]
+                )
+                for idx, (ratio, weight) in enumerate(zip(ratios, weights))
+            ]
+        )
+        .groupby("chrom")
+        .filter(lambda x: x["genomedat"].notna().any())
+        .sort_values(by=["chrom", "maploc"], ascending=[True, True])
     )
-    chroms_vector = np.repeat(
-        [
-            list(range(1, len(chr_data) + 1))
-            for chr_data in results["results_r"]
-        ],
-        [len(chr_data) for chr_data in results["results_r"]],
-    )
-    ratios_vector = np.concatenate(results["results_r"], axis=0)
-    weights_vector = np.concatenate(results["results_w"], axis=0)
 
     # Run CBS and process results
     results_c = []
@@ -284,17 +297,12 @@ def exec_cbs(rem_input, results):
         cbs_input = Path(tmpdir) / "cbs_input.json"
         cbs_output = Path(tmpdir) / "cbs_output.json"
 
-        json.dump(
-            {
-                # input data for CBS
-                "chroms": chroms_vector,
-                "genomdat": ratios_vector,
-                "maploc": maploc_vector,
-                "weights": weights_vector,
-            },
-            cbs_input.open("w"),
-            indent=4,
-        )
+        with cbs_input.open("w") as f:
+            json.dump(
+                cna_df.replace({np.nan: None}).to_dict(orient="list"),
+                f,
+                indent=4,
+            )
 
         r_cmd = [
             "Rscript",
@@ -308,10 +316,10 @@ def exec_cbs(rem_input, results):
             "--id",
             str(os.path.basename(sample_id)),
             "--seed",
-            str(rem_input["args"].seed),
+            str(rem_input["args"].cbs_seed),
             # CBS
             "--alpha",
-            str(rem_input["args"].alpha),
+            str(rem_input["args"].cbs_alpha),
             "--nperm",
             str(rem_input["args"].cbs_nperm),
             "--p_method",
@@ -341,7 +349,7 @@ def exec_cbs(rem_input, results):
         try:
             subprocess.check_call(r_cmd)
             with cbs_output.open("r") as f:
-                results_c = json.load(f)
+                results_c = pd.read_json(f)
         except subprocess.CalledProcessError as e:
             logging.critical(f"Rscript failed: {e}")
             cbs_input.rename(os.getcwd() + "/cbs_input.json")
