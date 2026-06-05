@@ -36,12 +36,6 @@ eta_arg <- get_arg("--eta")
 eta <- if (is.null(eta_arg) || is.na(eta_arg)) 0.05 else as.numeric(eta_arg)
 trim_arg <- get_arg("--trim")
 trim <- if (is.null(trim_arg) || is.na(trim_arg)) 0.025 else as.numeric(trim_arg)
-undo_prune_arg <- get_arg("--undo_prune")
-undo_prune <- if (is.null(undo_prune_arg) || is.na(undo_prune_arg)) 0.05 else as.numeric(undo_prune_arg)
-undo_splits_arg <- get_arg("--undo_splits")
-undo_splits <- if (is.null(undo_splits_arg) || is.na(undo_splits_arg)) "none" else as.character(undo_splits_arg)
-undo_sd_arg <- get_arg("--undo_sd")
-undo_sd <- if (is.null(undo_sd_arg) || is.na(undo_sd_arg)) 3 else as.numeric(undo_sd_arg)
 verbose_arg <- get_arg("--verbose")
 verbosity <- if (is.null(verbose_arg) || is.na(verbose_arg)) 0 else as.numeric(verbose_arg)
 
@@ -106,7 +100,7 @@ segments <- segment(
   # the probability to declare a change conditioned on the permuted statistic exceeding
   # the observed statistic exactly j (= 1,...,nperm*alpha) times.
   eta=eta,
-
+  
   # the sequential boundary used to stop and declare a change. This boundary is a
   # function of nperm, alpha and eta. It can be obtained using the function "getbdry"
   # and used instead of having the "segment" function compute it every time it is
@@ -120,14 +114,14 @@ segments <- segment(
   # A character string specifying how change-points are to be undone, if at all. De-
   # fault is "none". Other choices are "prune", which uses a sum of squares criterion,
   # and "sdundo", which undoes splits that are not at least this many SDs apart.
-  undo.splits = undo_splits,
+  undo.splits = "none",
 
   # the proportional increase in sum of squares allowed when eliminating splits if
   # undo.splits="prune".
-  undo.prune = undo_prune,
+  #undo.prune = undo_prune,
 
   # the number of SDs between means to keep a split if undo.splits="sdundo".
-  undo.SD = undo_sd,
+  #undo.SD = undo_sd,
 
   # verbosity level. 0 for no output, 1 for current sample, 2 for current chromosome, 3 for current segment.
   verbose = verbosity,

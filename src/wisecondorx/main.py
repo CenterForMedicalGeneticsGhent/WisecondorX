@@ -305,27 +305,6 @@ def wcx_predict(
             help="proportion of data to be trimmed for variance calculation for smoothing outliers and undoing splits based on SD.",
         ),
     ] = 0.025,
-    cbs_undo_splits: Annotated[
-        str,
-        typer.Option(
-            "--cbs_undo_splits",
-            help='A character string specifying how change-points are to be undone, if at all. Default is "none". Other choices are "prune", which uses a sum of squares criterion, and "sdundo", which undoes splits that are not at least this many SDs apart.',
-        ),
-    ] = "none",
-    cbs_undo_prune: Annotated[
-        float,
-        typer.Option(
-            "--cbs_undo_prune",
-            help='the proportional increase in sum of squares allowed when eliminating splits if --cbs_undo_splits="prune".',
-        ),
-    ] = 0.05,
-    cbs_undo_sd: Annotated[
-        float,
-        typer.Option(
-            "--cbs_undo_sd",
-            help='the number of SDs between means to keep a split if --cbs_undo_splits="sdundo".',
-        ),
-    ] = 3.0,
     zscore: Annotated[
         float,
         typer.Option(help="z-score cut-off for aberration calling.", min=0.0),
@@ -396,9 +375,6 @@ def wcx_predict(
     args.cbs_nmin = cbs_nmin
     args.cbs_eta = cbs_eta
     args.cbs_trim = cbs_trim
-    args.cbs_undo_prune = cbs_undo_prune
-    args.cbs_undo_splits = cbs_undo_splits
-    args.cbs_undo_sd = cbs_undo_sd
     args.zscore = zscore
     args.beta = beta
     args.blacklist = blacklist

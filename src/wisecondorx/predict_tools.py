@@ -334,12 +334,6 @@ def exec_cbs(rem_input, results):
             str(rem_input["args"].cbs_eta),
             "--trim",
             str(rem_input["args"].cbs_trim),
-            "--undo_prune",
-            str(rem_input["args"].cbs_undo_prune),
-            "--undo_splits",
-            str(rem_input["args"].cbs_undo_splits),
-            "--undo_sd",
-            str(rem_input["args"].cbs_undo_sd),
             # set verbose level based on Python logging level (debug -> 3, else 0)
             "--verbose",
             "3" if logging.getLogger().getEffectiveLevel() == 10 else "0",
