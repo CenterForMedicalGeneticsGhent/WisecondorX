@@ -11,22 +11,21 @@ from scipy.stats import norm
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import subprocess
-from wisecondorx.overall_tools import get_z_score
-
-"""
-Returns gender based on Gaussian mixture
-model trained during newref phase.
-"""
+from wisecondorx.overall_tools import get_z_score, Sex
 
 
 def predict_gender(sample, trained_cutoff):
+    """
+    Returns gender based on Gaussian mixture
+    model trained during newref phase.
+    """
     Y_fraction = float(np.sum(sample["24"])) / float(
         np.sum([np.sum(sample[x]) for x in sample.keys()])
     )
     if Y_fraction > trained_cutoff:
-        return "M"
+        return Sex.MALE
     else:
-        return "F"
+        return Sex.FEMALE
 
 
 """
@@ -274,7 +273,7 @@ def exec_cbs(rem_input, results):
             [
                 {
                     "chrom": chrom,
-                    "maploc": (idx + 1) * rem_input["binsize"],
+                    "maploc": idx * rem_input["binsize"] + 1,
                     "genomedat": float(ratio),
                     "weights": np.nextafter(0, 1)
                     if weight == 0
@@ -348,7 +347,6 @@ def exec_cbs(rem_input, results):
             logging.critical(f"Rscript failed: {e}")
             cbs_input.rename(os.getcwd() + "/cbs_input.json")
             sys.exit(1)
-
     segment_z = get_z_score(results_c, results)
     results_c = [
         results_c[i][:3] + [segment_z[i]] + [results_c[i][3]]

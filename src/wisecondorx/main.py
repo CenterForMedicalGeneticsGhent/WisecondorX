@@ -423,16 +423,16 @@ def wcx_predict(
         sample, int(sample_file["binsize"].item()), int(ref_file["binsize"])
     )
 
-    gender = predict_gender(sample, ref_file["trained_cutoff"])
+    gender = (
+        args.gender
+        if args.gender
+        else predict_gender(sample, ref_file["trained_cutoff"])
+    )
     if not ref_file["is_nipt"]:
-        if args.gender:
-            gender = args.gender
         sample = gender_correct(sample, gender)
         ref_gender = gender
     else:
-        if args.gender:
-            gender = args.gender
-        ref_gender = "F"
+        ref_gender = Sex.FEMALE
 
     logging.info("Normalizing autosomes ...")
 
@@ -441,33 +441,33 @@ def wcx_predict(
     )
 
     if not ref_file["is_nipt"]:
-        if not ref_file["has_male"] and gender == "M":
+        if not ref_file["has_male"] and gender == Sex.MALE:
             logging.warning(
                 "This sample is male, whilst the reference is created with fewer than 5 males. "
                 "The female gonosomal reference will be used for X predictions. Note that these might "
                 "not be accurate. If the latter is desired, create a new reference and include more "
                 "male samples."
             )
-            ref_gender = "F"
+            ref_gender = Sex.FEMALE
 
-        elif not ref_file["has_female"] and gender == "F":
+        elif not ref_file["has_female"] and gender == Sex.FEMALE:
             logging.warning(
                 "This sample is female, whilst the reference is created with fewer than 5 females. "
                 "The male gonosomal reference will be used for XY predictions. Note that these might "
                 "not be accurate. If the latter is desired, create a new reference and include more "
                 "female samples."
             )
-            ref_gender = "M"
+            ref_gender = Sex.MALE
 
     logging.info("Normalizing gonosomes ...")
 
     null_ratios_aut_per_bin = ref_file["null_ratios"]
-    null_ratios_gon_per_bin = ref_file["null_ratios.{}".format(ref_gender)][
-        len(null_ratios_aut_per_bin) :
-    ]
+    null_ratios_gon_per_bin = ref_file[
+        "null_ratios.{}".format(ref_gender.value)
+    ][len(null_ratios_aut_per_bin) :]
 
     results_r_2, results_z_2, results_w_2, ref_sizes_2, _, _ = normalize(
-        args, sample, ref_file, ref_gender
+        args, sample, ref_file, ref_gender.value
     )
 
     rem_input = {
@@ -475,15 +475,15 @@ def wcx_predict(
         "wd": str(os.path.dirname(os.path.realpath(__file__))),
         "binsize": int(ref_file["binsize"]),
         "n_reads": n_reads,
-        "ref_gender": ref_gender,
-        "gender": gender,
-        "mask": ref_file["mask.{}".format(ref_gender)],
-        "bins_per_chr": ref_file["bins_per_chr.{}".format(ref_gender)],
+        "ref_gender": ref_gender.value,
+        "gender": gender.value,
+        "mask": ref_file["mask.{}".format(ref_gender.value)],
+        "bins_per_chr": ref_file["bins_per_chr.{}".format(ref_gender.value)],
         "masked_bins_per_chr": ref_file[
-            "masked_bins_per_chr.{}".format(ref_gender)
+            "masked_bins_per_chr.{}".format(ref_gender.value)
         ],
         "masked_bins_per_chr_cum": ref_file[
-            "masked_bins_per_chr_cum.{}".format(ref_gender)
+            "masked_bins_per_chr_cum.{}".format(ref_gender.value)
         ],
     }
 
