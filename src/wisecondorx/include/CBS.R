@@ -39,26 +39,22 @@ trim <- if (is.null(trim_arg) || is.na(trim_arg)) 0.025 else as.numeric(trim_arg
 verbose_arg <- get_arg("--verbose")
 verbosity <- if (is.null(verbose_arg) || is.na(verbose_arg)) 0 else as.numeric(verbose_arg)
 
-# Load and pre-process input
-input <- jsonlite::fromJSON(infile)
-genomedat <- input$genomedat
-chrom <- input$chrom
-maploc <- input$maploc
-weights <- input$weights
+# Load input as dataframe
+input <- jsonlite::fromJSON(infile, simplifyDataFrame = TRUE)
 
 # CBS
 set.seed(seed)
 cna_object <- CNA(
   # a vector or matrix of data from array-CGH, ROMA, or other copy number experiments.
   # If it is a matrix the rows correspond to the markers and the columns to the samples.
-  genomedat,
+  input$ratios,
   # the chromosomes (or other group identifier) from which the markers came. 
   # Vector of length same as the number of rows of genomdat. If one wants the chromosomes to be ordered in the natural order,
   # this variable should be numeric orordered category.
-  chrom,
+  input$chrom,
   # the locations of marker on the genome. Vector of length same as the number of
   # rows of genomdat. This has to be numeric.
-  maploc,
+  input$maploc,
   data.type = "logratio",
   sampleid = id,
   presorted = TRUE
@@ -70,7 +66,7 @@ segments <- segment(
   # a vector of weights for the probes. The weights should be inversely proportional
   # to their variances. Currently all weights should be positive i.e. remove probes
   # with zero weight prior to segmentation.
-  weights = weights,
+  weights = input$weights,
 
   # significance levels for the test to accept change-points.
   alpha = alpha,

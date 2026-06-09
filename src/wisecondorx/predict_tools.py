@@ -1,6 +1,6 @@
 # WisecondorX
 
-import json
+import argparse
 import logging
 import os
 import sys
@@ -11,7 +11,7 @@ from scipy.stats import norm
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import subprocess
-from wisecondorx.overall_tools import get_z_score, Sex
+from wisecondorx.overall_tools import Sex
 
 
 def predict_gender(sample, trained_cutoff):
@@ -108,6 +108,10 @@ def normalize_repeat(test_data, ref_file, optimal_cutoff, ct, cp, ap):
         )
 
         test_copy[ct:][np.abs(results_z) >= norm.ppf(0.99)] = -1
+
+    if results_r is None or results_z is None or ref_sizes is None:
+        raise RuntimeError("Normalization failed to produce output arrays")
+
     m_lr = np.nanmedian(np.log2(results_r))
     m_z = np.nanmedian(results_z)
 
@@ -250,58 +254,36 @@ def _import_bed(rem_input):
     return bed
 
 
-def exec_cbs(rem_input, results):
+def exec_cbs(cna_df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
     """
-    Executed CBS on results_r using results_w as weights.
-    Calculates segmental zz-scores.
+    Executed CBS on ratios per bins using weights per bins as weights.
+
+    :param pd.DataFrame cna_df: DataFrame with columns 'chrom', 'maploc', 'null_ratios_mean', 'null_ratios_sd', 'ratios', 'weights' and 'zscores' for each genomic bin
+    :param argparse.Namespace args: Command-line arguments namespace
+    :return: DataFrame with columns 'sample', 'chrom', 'loc.start', 'loc.end', 'num_mark' and 'seg.mean' for each genomic segment
+    :rtype: pd.DataFrame
     """
 
     # script params
     script_path = Path(__file__).parent / "include" / "CBS.R"
-    sample_id = getattr(rem_input["args"], "outid", "sample")
 
-    # prepare dataframe containing vectors for R script
-    # convert 0 weights to very small numbers to avoid issues with CBS
-    # remove chromosomes with only 0 ratios
-    # chrom     :  [Integer Vector]  -> e.g., 1, 1, 1, 2, 2, 3...
-    # maploc    :  [Numeric Vector]  -> e.g., 1000, 2000, 3000, 1000, 2000...
-    # genomedat  :  [Numeric Vector]  -> e.g., -0.05, 0.12, -0.44, 0.02...
-    # weights   :  [Numeric Vector]  -> e.g., 0.5, 0.8, 0.3, 0.9, 0.7...
-    chrom_names = list(range(1, len(results["results_r"]) + 1))
-    cna_df = (
-        pd.DataFrame(
-            [
-                {
-                    "chrom": chrom,
-                    "maploc": idx * rem_input["binsize"] + 1,
-                    "genomedat": float(ratio),
-                    "weights": np.nextafter(0, 1)
-                    if weight == 0
-                    else float(weight),
-                }
-                for chrom, ratios, weights in zip(
-                    chrom_names, results["results_r"], results["results_w"]
-                )
-                for idx, (ratio, weight) in enumerate(zip(ratios, weights))
-            ]
-        )
-        .groupby("chrom")
-        .filter(lambda x: x["genomedat"].notna().any())
-        .sort_values(by=["chrom", "maploc"], ascending=[True, True])
+    # Preprocess CNA dataframe for CBS input
+    # replace 0s with NaN
+    cna_df["ratios"][cna_df["ratios"] == 0] = np.nan
+    # replace 0s with a very small number to avoid division by zero in CBS
+    cna_df["weights"][cna_df["weights"] == 0] = np.nextafter(0, 1)
+    # filter out chromosomes with no valid bins to avoid CBS errors
+    cna_df = cna_df.groupby("chrom").filter(
+        lambda x: x["ratios"].notna().any()
     )
 
     # Run CBS and process results
-    results_c = []
     with TemporaryDirectory() as tmpdir:
         cbs_input = Path(tmpdir) / "cbs_input.json"
         cbs_output = Path(tmpdir) / "cbs_output.json"
 
         with cbs_input.open("w") as f:
-            json.dump(
-                cna_df.replace({np.nan: None}).to_dict(orient="list"),
-                f,
-                indent=4,
-            )
+            cna_df.to_json(f, orient="records", indent=4)
 
         r_cmd = [
             "Rscript",
@@ -313,26 +295,26 @@ def exec_cbs(rem_input, results):
             str(cbs_output),
             # CNA
             "--id",
-            str(os.path.basename(sample_id)),
+            str(args.sampleid),
             "--seed",
-            str(rem_input["args"].cbs_seed),
+            str(args.cbs_seed),
             # CBS
             "--alpha",
-            str(rem_input["args"].cbs_alpha),
+            str(args.cbs_alpha),
             "--nperm",
-            str(rem_input["args"].cbs_nperm),
+            str(args.cbs_nperm),
             "--p_method",
-            str(rem_input["args"].cbs_p_method),
+            str(args.cbs_p_method),
             "--min_width",
-            str(rem_input["args"].cbs_min_width),
+            str(args.cbs_min_width),
             "--kmax",
-            str(rem_input["args"].cbs_kmax),
+            str(args.cbs_kmax),
             "--nmin",
-            str(rem_input["args"].cbs_nmin),
+            str(args.cbs_nmin),
             "--eta",
-            str(rem_input["args"].cbs_eta),
+            str(args.cbs_eta),
             "--trim",
-            str(rem_input["args"].cbs_trim),
+            str(args.cbs_trim),
             # set verbose level based on Python logging level (debug -> 3, else 0)
             "--verbose",
             "3" if logging.getLogger().getEffectiveLevel() == 10 else "0",
@@ -341,15 +323,113 @@ def exec_cbs(rem_input, results):
 
         try:
             subprocess.check_call(r_cmd)
-            with cbs_output.open("r") as f:
-                results_c = pd.read_json(f)
         except subprocess.CalledProcessError as e:
             logging.critical(f"Rscript failed: {e}")
             cbs_input.rename(os.getcwd() + "/cbs_input.json")
             sys.exit(1)
-    segment_z = get_z_score(results_c, results)
-    results_c = [
-        results_c[i][:3] + [segment_z[i]] + [results_c[i][3]]
-        for i in range(len(results_c))
+
+        with cbs_output.open() as f:
+            return pd.read_json(f, orient="records")
+
+
+def get_segment_z_score(segments_df: pd.DataFrame, cna_df: pd.DataFrame):
+    """
+    Calculate Z-scores for genomic segments against a baseline.
+
+    For each segment in segment:
+        1. Slices background data (ratios, filters, weights) to the segment coordinates.
+        2. Filters out bad genomic bins where the filter matrix (results_r) equals 0.
+        3. Cleans data by replacing infinite values with NaN.
+        4. Computes a column-wise weighted average across the segment slice.
+        5. Establishes a null model by calculating the mean and SD of those averages.
+        6. Computes the segment's Z-score: (observed_value - null_mean) / null_sd.
+        7. Returns "nan" if the baseline mean or SD cannot be mathematically resolved.
+
+    :param pd.DataFrame segments_df: DataFrame with columns 'sample', 'chrom', 'loc.start', 'loc.end', 'num_mark' and 'seg.mean' for each genomic segment
+    :param pd.DataFrame cna_df: DataFrame with columns 'chrom', 'maploc', 'null_ratios_mean', 'null_ratios_sd', 'ratios', 'weights' and 'zscores' for each genomic bin
+
+    Returns:
+        segments dataframe with an extra column of Z-scores corresponding to each segment in the input dataFrame with invalid calculations marked as "nan".
+    """
+
+    # --- STEP 1: Vectorized Slicing via Conditional Merge ---
+    # We join segments and cna_filtered on chromosomes, then filter rows
+    # where the maploc falls within the segment's start and end boundaries.
+    merged = pd.merge(
+        segments_df.reset_index().rename(columns={"index": "seg_idx"}),
+        cna_df,
+        on="chrom",
+        suffixes=("_seg", "_cna"),
+    )
+
+    # Keep only the genomic bins that physically sit inside each segment's window
+    in_window = merged["maploc"].between(
+        merged["loc.start"], merged["loc.end"]
+    )
+    matched_bins = merged[in_window].copy()
+
+    # If no bins matched any segments, append 'nan' column and exit early
+    if matched_bins.empty:
+        result_df = segments_df.copy()
+        result_df["z_score"] = "nan"
+        return result_df
+
+    # --- STEP 4 & 5: Vectorized Null Model Math via Groupby ---
+    # Pre-calculate weighted products for the weighted mean formula
+    matched_bins["weighted_ratios"] = (
+        matched_bins["ratios"] * matched_bins["weights"]
+    )
+
+    # Group by the unique segment index to calculate mean and SD simultaneously in C-speed
+    grouped = matched_bins.groupby("seg_idx")
+
+    stats = grouped.agg(
+        total_weights=("weights", "sum"),
+        sum_weighted_ratios=("weighted_ratios", "sum"),
+        null_mean=("ratios", "mean"),
+        null_sd=(
+            "ratios",
+            lambda x: x.std(ddof=0),
+        ),  # Population standard deviation
+    )
+
+    # Calculate the localized weighted null mean
+    stats["null_weighted_mean"] = np.where(
+        stats["total_weights"] > 0,
+        stats["sum_weighted_ratios"] / stats["total_weights"],
+        np.nan,
+    )
+
+    # --- STEP 6, 7 & 8: Compute and Clamp Z-scores Matrix-wide ---
+    # Join the computed stats back onto the original segments frame
+    result_df = segments_df.copy()
+    result_df = result_df.join(stats)
+
+    # Evaluate mathematical validity globally
+    invalid_mask = (
+        result_df["null_mean"].isna()
+        | result_df["null_sd"].isna()
+        | (result_df["null_sd"] == 0)
+        | result_df["total_weights"].isna()
+    )
+
+    # Compute raw Z-scores matrix-wide
+    z_raw = (
+        result_df["seg.mean"] - result_df["null_weighted_mean"]
+    ) / result_df["null_sd"]
+
+    # Apply capping and fill invalid boundaries
+    result_df["z_score"] = np.clip(z_raw, -1000, 1000)
+    result_df.loc[invalid_mask, "z_score"] = "nan"
+
+    # Drop the temporary calculation helper columns before returning
+    columns_to_drop = [
+        "total_weights",
+        "sum_weighted_ratios",
+        "null_mean",
+        "null_sd",
+        "null_weighted_mean",
     ]
-    return results_c
+    result_df = result_df.drop(columns=columns_to_drop, errors="ignore")
+
+    return result_df

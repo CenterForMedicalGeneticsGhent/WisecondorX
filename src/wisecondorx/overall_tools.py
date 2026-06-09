@@ -64,37 +64,42 @@ def gender_correct(sample, gender):
     return sample
 
 
-"""
-Calculates between sample z-score.
-"""
-
-
-def get_z_score(results_c, results):
-    results_nr, results_r, results_w = (
+def get_z_score(results_segments, results):
+    """
+    Calculates between sample z-score.
+    """
+    results_null_ratio, results_ratio, results_weight = (
         results["results_nr"],
         results["results_r"],
         results["results_w"],
     )
     zs = []
-    for segment in results_c:
-        segment_nr = results_nr[segment[0]][segment[1] : segment[2]]
-        segment_rr = results_r[segment[0]][segment[1] : segment[2]]
-        segment_nr = [
-            segment_nr[i] for i in range(len(segment_nr)) if segment_rr[i] != 0
+    for segment in results_segments:
+        segment_null_ratio = results_null_ratio[segment[0]][
+            segment[1] : segment[2]
         ]
-        for i in range(len(segment_nr)):
-            for ii in range(len(segment_nr[i])):
-                if not np.isfinite(segment_nr[i][ii]):
-                    segment_nr[i][ii] = np.nan
-        segment_w = results_w[segment[0]][segment[1] : segment[2]]
-        segment_w = [
-            segment_w[i] for i in range(len(segment_w)) if segment_rr[i] != 0
+        segment_ratio = results_ratio[segment[0]][segment[1] : segment[2]]
+        segment_null_ratio = [
+            segment_null_ratio[i]
+            for i in range(len(segment_null_ratio))
+            if segment_ratio[i] != 0
+        ]
+        for i in range(len(segment_null_ratio)):
+            for ii in range(len(segment_null_ratio[i])):
+                if not np.isfinite(segment_null_ratio[i][ii]):
+                    segment_null_ratio[i][ii] = np.nan
+
+        segment_weight = results_weight[segment[0]][segment[1] : segment[2]]
+        segment_weight = [
+            segment_weight[i]
+            for i in range(len(segment_weight))
+            if segment_ratio[i] != 0
         ]
         null_segments = [
             np.ma.average(
-                np.ma.masked_array(x, pd.isnull(x)), weights=segment_w
+                np.ma.masked_array(x, pd.isnull(x)), weights=segment_weight
             )
-            for x in np.transpose(segment_nr)
+            for x in np.transpose(segment_null_ratio)
         ]
         null_mean = np.ma.mean([x for x in null_segments if np.isfinite(x)])
         null_sd = np.ma.std([x for x in null_segments if np.isfinite(x)])
