@@ -30,22 +30,36 @@ def wcx_convert(
     Convert and filter aligned reads to .npz format.
     """
 
-    reads_file: pysam.AlignmentFile = None
+    reads_file: pysam.AlignmentFile
     # check if infile exists and has an index
     if not (infile.exists() and infile.is_file()):
         logging.error(f"Input file {infile} does not exist or is not a file.")
         sys.exit(1)
     if infile.suffix == ".bam":
-        reads_file = pysam.AlignmentFile(infile, "rb")
+        if (
+            not infile.with_suffix(infile.suffix + ".bai").exists()
+            and not infile.with_suffix(infile.suffix + ".csi").exists()
+        ):
+            logging.warning(
+                f"Input file {infile} does not have an index (.bai, .csi). Indexing prior to analysis..."
+            )
+            pysam.index(str(infile))
+        reads_file = pysam.AlignmentFile(str(infile), "rb")
     elif infile.suffix == ".cram":
         if not reference:
             logging.error(
                 "Cram inputs need a reference fasta provided through the '--reference' flag."
             )
         elif not reference.exists():
-            logging.error(f"Fasta reference file {reference} does not exist.")
+            logging.fatal(f"Fasta reference file {reference} does not exist.")
+            sys.exit(1)
+        if not infile.with_suffix(infile.suffix + ".crai").exists():
+            logging.warning(
+                f"Input file {infile} does not have an index (.crai). Indexing prior to analysis..."
+            )
+            pysam.index(str(infile))
         reads_file = pysam.AlignmentFile(
-            infile, "rc", reference_filename=reference
+            str(infile), "rc", reference_filename=str(reference)
         )
 
     logging.info("Importing data ...")
