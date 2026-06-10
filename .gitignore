@@ -9,7 +9,7 @@ wisecondorx.egg-info/
 /build/
 /dist/
 **.pyc
-
+.vscode/
 .coverage
 .mypy_cache/
 .pytest_cache/
@@ -25,5 +25,6 @@ wisecondorx.egg-info/
 .env
 .env.*
 
+debug/
 _CBS_tmp/
 _plot_tmp/
