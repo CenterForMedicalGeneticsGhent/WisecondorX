@@ -2,7 +2,9 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
+from matplotlib.patches import Rectangle
 import re
+import pandas as pd
 
 # Color scheme
 BLACK = "#3f3f3f"
@@ -73,6 +75,44 @@ def get_boxplot_stats(data):
     return [lower, upper]
 
 
+def _normalize_chrom(chrom):
+    chrom_str = str(chrom).strip()
+    chrom_str = (
+        chrom_str[3:] if chrom_str.lower().startswith("chr") else chrom_str
+    )
+    chrom_upper = chrom_str.upper()
+
+    if chrom_upper == "X":
+        return 23
+    if chrom_upper == "Y":
+        return 24
+
+    try:
+        return int(chrom_str)
+    except ValueError:
+        return chrom_str
+
+
+def _chrom_label(chrom):
+    normalized = _normalize_chrom(chrom)
+    if normalized == 23:
+        return "chrX"
+    if normalized == 24:
+        return "chrY"
+    return f"chr{normalized}"
+
+
+def _chrom_sort_key(chrom):
+    normalized = _normalize_chrom(chrom)
+    if isinstance(normalized, int):
+        return (0, normalized)
+    return (1, str(normalized))
+
+
+def _safe_numeric(series):
+    return pd.to_numeric(series, errors="coerce").to_numpy(dtype=float).copy()
+
+
 def write_plots(data):
     plt.switch_backend("Agg")
     out_dir = data["out_dir"]
@@ -89,49 +129,57 @@ def write_plots(data):
     regions_path = data["regions"]
     plot_title = data.get("plot_title")
 
-    results_r = data["results_r"]
-    results_w = data["results_w"]
-    results_c = data["results_c"]
+    cna_df = data["cna_df"].copy()
+    segments_df = data["segments_df"].copy()
 
-    # Flatten results_r and results_w for genome-wide plot
-    ratio = []
-    weights = []
-    bins_per_chr = []
-    for chr_r in results_r:
-        ratio.extend(chr_r)
-        bins_per_chr.append(len(chr_r))
-    for chr_w in results_w:
-        weights.extend(chr_w)
+    cna_df = cna_df.sort_values(by=["chrom", "maploc"])
+    chrom_keys = sorted(
+        cna_df["chrom"].drop_duplicates().tolist(), key=_chrom_sort_key
+    )
 
-    ratio = np.array(ratio, dtype=float)
-    ratio[ratio == 0] = np.nan
-    weights = np.array(weights, dtype=float)
-    weights[weights == 0] = np.nan
-
-    num_chrs = 24 if gender == "M" else 23
-    ratio = ratio[: sum(bins_per_chr[:num_chrs])]
-    weights = weights[: sum(bins_per_chr[:num_chrs])]
-
-    chr_ends = [0] + np.cumsum(bins_per_chr).tolist()
-    chr_mids = [chr_ends[i] + bins_per_chr[i] / 2 for i in range(num_chrs)]
-
-    labels = [f"chr{i + 1}" for i in range(num_chrs)]
-    if num_chrs >= 23:
-        labels[22] = "chrX"
-    if num_chrs >= 24:
-        labels[23] = "chrY"
-
-    # Boxplot data per chromosome
+    chrom_offsets = {}
+    chrom_lengths = {}
+    chrom_labels = []
+    ratio_parts = []
+    weight_parts = []
     box_list = []
     l_whis_per_chr = []
     h_whis_per_chr = []
-    for i in range(num_chrs):
-        chr_data = ratio[chr_ends[i] : chr_ends[i + 1]]
-        box_list.append(chr_data[~np.isnan(chr_data)])
-        stats = get_boxplot_stats(chr_data)
+
+    running_offset = 0
+    for chrom in chrom_keys:
+        chrom_df = cna_df[cna_df["chrom"] == chrom].sort_values(by="maploc")
+        chrom_offsets[chrom] = running_offset
+        chrom_lengths[chrom] = len(chrom_df)
+        chrom_labels.append(_chrom_label(chrom))
+
+        chrom_ratio = _safe_numeric(chrom_df["ratios"])
+        chrom_ratio[chrom_ratio == 0] = np.nan
+        chrom_weights = _safe_numeric(chrom_df["weights"])
+        chrom_weights[chrom_weights == 0] = np.nan
+
+        ratio_parts.append(chrom_ratio)
+        weight_parts.append(chrom_weights)
+        box_list.append(chrom_ratio[~np.isnan(chrom_ratio)])
+
+        stats = get_boxplot_stats(chrom_ratio)
         l_whis_per_chr.append(stats[0])
         h_whis_per_chr.append(stats[1])
 
+        running_offset += len(chrom_df)
+
+    ratio = np.concatenate(ratio_parts) if ratio_parts else np.array([])
+    weights = np.concatenate(weight_parts) if weight_parts else np.array([])
+    num_chrs = len(chrom_keys)
+    chr_ends = [0] + np.cumsum(
+        [chrom_lengths[chrom] for chrom in chrom_keys]
+    ).tolist()
+    chr_mids = [
+        chr_ends[i] + chrom_lengths[chrom_keys[i]] / 2 for i in range(num_chrs)
+    ]
+    labels = chrom_labels
+
+    # Boxplot data per chromosome
     chr_wide_upper_limit = (
         max(0.65, np.nanmax(h_whis_per_chr) if h_whis_per_chr else 0.65) * 1.25
     )
@@ -146,17 +194,29 @@ def write_plots(data):
             chr_wide_lower_limit = float(ylim_parts[0])
             chr_wide_upper_limit = float(ylim_parts[1])
 
+    segment_starts = _safe_numeric(segments_df["start"])
+    segment_ends = _safe_numeric(segments_df["end"])
+    segment_means = _safe_numeric(segments_df["ratio"])
+    segment_zscores = _safe_numeric(segments_df["zscore"])
+
     # Determine dot colors
-    dot_cols = [COLOR_A] * len(ratio)
-    for ab in results_c:
-        chr_idx = int(ab[0])
-        if chr_idx >= num_chrs:
+    dot_cols: list[tuple[float, float, float] | str] = [COLOR_A] * len(ratio)
+    for idx, segment in segments_df.reset_index(drop=True).iterrows():
+        chrom_key = _normalize_chrom(segment["chrom"])
+        if chrom_key not in chrom_offsets:
             continue
-        start_idx = int(ab[1]) + chr_ends[chr_idx]
-        end_idx = int(ab[2]) + chr_ends[chr_idx]
-        z_val = float(ab[3]) if isinstance(ab[3], (int, float)) else np.nan
-        height = float(ab[4])
-        ploidy = 1 if (chr_idx >= 22 and gender == "M") else 2
+
+        chr_offset = chrom_offsets[chrom_key]
+        chr_len = chrom_lengths[chrom_key]
+        start_idx = chr_offset + int(np.floor(segment_starts[idx] / binsize))
+        end_idx = chr_offset + max(
+            int(np.ceil(segment_ends[idx] / binsize)) - 1,
+            int(np.floor(segment_starts[idx] / binsize)),
+        )
+        end_idx = min(end_idx, chr_offset + chr_len - 1)
+        z_val = segment_zscores[idx]
+        height = segment_means[idx]
+        ploidy = 1 if chrom_key in [23, 24] and gender == "M" else 2
 
         color = COLOR_A
         if beta is not None:
@@ -174,8 +234,8 @@ def write_plots(data):
             else:
                 color = "grey"
 
-        for idx in range(start_idx, min(end_idx + 1, len(dot_cols))):
-            dot_cols[idx] = color
+        for dot_idx in range(start_idx, min(end_idx + 1, len(dot_cols))):
+            dot_cols[dot_idx] = color
 
     # Parse regions
     gene_labels = []
@@ -185,18 +245,8 @@ def write_plots(data):
                 parts = line.strip().split("\t")
                 if len(parts) < 4:
                     continue
-                chr_name = parts[0].replace("chr", "")
-                if chr_name == "X":
-                    c_idx = 22
-                elif chr_name == "Y":
-                    c_idx = 23
-                else:
-                    try:
-                        c_idx = int(chr_name) - 1
-                    except ValueError:
-                        continue
-
-                if c_idx >= num_chrs:
+                chrom_key = _normalize_chrom(parts[0])
+                if chrom_key not in chrom_offsets:
                     continue
 
                 try:
@@ -205,8 +255,8 @@ def write_plots(data):
                 except ValueError:
                     continue
 
-                start_bin = r_start // binsize + chr_ends[c_idx]
-                end_bin = r_end // binsize + chr_ends[c_idx]
+                start_bin = r_start // binsize + chrom_offsets[chrom_key]
+                end_bin = r_end // binsize + chrom_offsets[chrom_key]
 
                 if start_bin >= end_bin:
                     continue
@@ -257,7 +307,7 @@ def write_plots(data):
     # Scatter
     dot_sizes = (weights / np.pi) ** 0.5 * 20  # Adjusted multiplier
     ax_main.scatter(
-        range(len(ratio)),
+        np.arange(len(ratio)),
         ratio,
         c=dot_cols,
         s=dot_sizes,
@@ -287,18 +337,20 @@ def write_plots(data):
         )
 
     # Segments
-    for ab in results_c:
-        chr_idx = int(ab[0])
-        if chr_idx >= num_chrs:
+    for idx, segment in segments_df.reset_index(drop=True).iterrows():
+        chrom_key = _normalize_chrom(segment["chrom"])
+        if chrom_key not in chrom_offsets:
             continue
-        start = int(ab[1]) + chr_ends[chr_idx]
-        end = int(ab[2]) + chr_ends[chr_idx]
-        height = float(ab[4])
-        color = dot_cols[start]
+
+        start = chrom_offsets[chrom_key] + segment_starts[idx] / binsize
+        end = chrom_offsets[chrom_key] + segment_ends[idx] / binsize
+        height = segment_means[idx]
+        color = dot_cols[int(np.floor(start))]
+
         # In R it used AA, BB, CC with alpha. Here we use the base color with alpha
         face_color = list(color) + [0.3] if isinstance(color, tuple) else color
         ax_main.add_patch(
-            plt.Rectangle(
+            Rectangle(
                 (start, 0),
                 end - start,
                 height,
@@ -397,7 +449,7 @@ def write_plots(data):
     # Boxplots
     ax_box_auto.boxplot(
         box_list[:22],
-        labels=labels[:22],
+        tick_labels=labels[:22],
         flierprops=dict(marker="o", markersize=2, markerfacecolor=BLACK),
     )
     ax_box_auto.set_ylim(
@@ -411,7 +463,7 @@ def write_plots(data):
     if num_chrs > 22:
         ax_box_sex.boxplot(
             box_list[22:],
-            labels=labels[22:],
+            tick_labels=labels[22:],
             flierprops=dict(marker="o", markersize=2, markerfacecolor=BLACK),
         )
         y_sex_down = min(l_whis_per_chr[22:]) if l_whis_per_chr[22:] else -1
@@ -428,7 +480,7 @@ def write_plots(data):
     plt.close()
 
     # Chromosome-specific plots
-    for c in range(num_chrs):
+    for c, chrom in enumerate(chrom_keys):
         fig_chr = plt.figure(figsize=(10, 6))
         ax_chr = fig_chr.add_subplot(111)
 
@@ -487,18 +539,18 @@ def write_plots(data):
         )
 
         # Segments
-        for ab in results_c:
-            if int(ab[0]) != c:
+        for idx, segment in segments_df.reset_index(drop=True).iterrows():
+            if _normalize_chrom(segment["chrom"]) != _normalize_chrom(chrom):
                 continue
-            seg_start = int(ab[1]) + chr_start
-            seg_end = int(ab[2]) + chr_start
-            height = float(ab[4])
-            color = dot_cols[seg_start]
+            seg_start = chr_start + segment_starts[idx] / binsize
+            seg_end = chr_start + segment_ends[idx] / binsize
+            height = segment_means[idx]
+            color = dot_cols[int(np.floor(seg_start))]
             face_color = (
                 list(color) + [0.3] if isinstance(color, tuple) else color
             )
             ax_chr.add_patch(
-                plt.Rectangle(
+                Rectangle(
                     (seg_start, 0),
                     seg_end - seg_start,
                     height,

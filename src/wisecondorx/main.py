@@ -6,6 +6,7 @@ import sys
 import warnings
 from typing import Annotated
 import numpy as np
+import pandas as pd
 import typer
 import argparse
 from pathlib import Path
@@ -18,14 +19,15 @@ from wisecondorx.newref_control import (
 from wisecondorx.newref_tools import train_gender_model, get_mask
 from wisecondorx.overall_tools import gender_correct, scale_sample, Sex
 from wisecondorx.predict_control import normalize, get_post_processed_result
-from wisecondorx.predict_output import generate_output_tables
-from wisecondorx.plotter import write_plots
 from wisecondorx.predict_tools import (
+    get_segment_zscore,
     log_trans,
     exec_cbs,
     apply_blacklist,
     predict_gender,
 )
+from wisecondorx.predict_output import generate_output_tables
+from wisecondorx.plotter import write_plots
 from wisecondorx.ref_qc import qc_reference
 
 from wisecondorx import __version__
@@ -364,6 +366,7 @@ def wcx_predict(
     args.infile = infile
     args.reference = reference
     args.outid = outid
+    args.sampleid = str(os.path.basename(outid))
     args.minrefbins = minrefbins
     args.maskrepeats = maskrepeats
     args.cbs_seed = cbs_seed
@@ -529,34 +532,107 @@ def wcx_predict(
         logging.info("Applying blacklist ...")
         apply_blacklist(rem_input, results)
 
+    ## Vectorize results for easier handling in post-processing and plotting
+    # vector containing chromosome number for each bin throughout the genome
+    chrom_vec = np.repeat(
+        list(range(1, len(results["results_r"]) + 1)),
+        [len(c) for c in results["results_r"]],
+    )
+    # vector containing bin number for each bin throughout the genome
+    maploc_vec = np.concatenate(
+        [np.arange(1, n + 1) for n in [len(c) for c in results["results_r"]]]
+    )
+    # vector containing start position for each bin throughout the genome
+    start_pos_vec = (maploc_vec - 1) * rem_input["binsize"]
+    # vector containing end position for each bin throughout the genome
+    end_pos_vec = maploc_vec * rem_input["binsize"]
+    # vector containing ratio for each bin
+    ratios_vec = np.concatenate(results["results_r"]).astype(float)
+    # replace 0s with NaN
+    ratios_vec[ratios_vec == 0] = np.nan
+
+    # vector containing z-score for each bin
+    zscores_vec = np.concatenate(results["results_z"]).astype(float)
+
+    # vector containing weight for each bin
+    weights_vec = np.concatenate(results["results_w"]).astype(float)
+    # replace 0s with a very small number to avoid division by zero in CBS
+    weights_vec[weights_vec == 0] = np.nextafter(0, 1)
+    if np.isnan(weights_vec).any() or np.isinf(weights_vec).any():
+        logging.warning(
+            "Non-numeric values found in weights -- reference too small. Circular binary segmentation and z-scoring will be unweighted"
+        )
+        weights_vec = np.ones(len(weights_vec))
+
+    # vectors containing mean and stdev of null ratios for each bin
+    null_ratios_mean_vec = np.array(
+        [
+            float(np.mean(bin_null_ratios))
+            for chr_null_ratios in results["results_nr"]
+            for bin_null_ratios in chr_null_ratios
+        ],
+        dtype=float,
+    )
+    null_ratios_stdev_vec = np.array(
+        [
+            float(np.std(bin_null_ratios))
+            for chr_null_ratios in results["results_nr"]
+            for bin_null_ratios in chr_null_ratios
+        ],
+        dtype=float,
+    )
+
+    cna_df = (
+        pd.DataFrame(
+            {
+                "chrom": chrom_vec,
+                "maploc": maploc_vec,
+                "start": start_pos_vec,
+                "end": end_pos_vec,
+                "null_ratios_mean": null_ratios_mean_vec,
+                "null_ratios_sd": null_ratios_stdev_vec,
+                "ratios": ratios_vec,
+                "weights": weights_vec,
+                "zscores": zscores_vec,
+            }
+        )
+        .sort_values(by=["chrom", "maploc"], ascending=[True, True])
+        .reset_index(drop=True)
+    )
+
     logging.info("Executing circular binary segmentation ...")
 
-    results["results_c"] = exec_cbs(rem_input, results)
+    # Run CBS and add z-scores per segment
+    segments_df = get_segment_zscore(exec_cbs(cna_df, args), cna_df)
+    # Rename columns, replace start and end idx with genomic positions, and sort by chromosome and start position
+    segments_df["start"] = segments_df["start"] * rem_input["binsize"]
+    segments_df["end"] = segments_df["end"] * rem_input["binsize"]
+    segments_df = segments_df.sort_values(
+        by=["chrom", "start"], ascending=[True, True]
+    ).reset_index(drop=True)
 
     if args.bed:
         logging.info("Writing tables ...")
-        generate_output_tables(rem_input, results)
+        generate_output_tables(cna_df, segments_df, args)
 
     if args.plot:
         logging.info("Writing plots ...")
         data = {
             "ref_gender": str(rem_input["ref_gender"]),
-            "beta": str(rem_input["args"].beta),
-            "zscore": str(rem_input["args"].zscore),
+            "beta": str(args.beta),
+            "zscore": str(args.zscore),
             "binsize": str(rem_input["binsize"]),
             "n_reads": str(rem_input["n_reads"]),
-            "cairo": rem_input["args"].cairo,
-            "results_r": results["results_r"],
-            "results_w": results["results_w"],
-            "results_c": results["results_c"],
-            "ylim": str(rem_input["args"].ylim),
-            "regions": str(rem_input["args"].regions),
-            "out_dir": str("{}.plots".format(rem_input["args"].outid)),
+            "cairo": args.cairo,
+            "cna_df": cna_df,
+            "segments_df": segments_df,
+            "ylim": str(args.ylim),
+            "regions": str(args.regions),
+            "out_dir": str(f"{args.outid}.plots"),
         }
 
-        if rem_input["args"].add_plot_title:
-            # Strip away paths from the outid if need be
-            data["plot_title"] = str(os.path.basename(rem_input["args"].outid))
+        if args.add_plot_title:
+            data["plot_title"] = str(args.sampleid)
 
         write_plots(data)
 

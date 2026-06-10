@@ -258,9 +258,12 @@ def exec_cbs(cna_df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
     """
     Executed CBS on ratios per bins using weights per bins as weights.
 
-    :param pd.DataFrame cna_df: DataFrame with columns 'chrom', 'maploc', 'null_ratios_mean', 'null_ratios_sd', 'ratios', 'weights' and 'zscores' for each genomic bin
+    :param pd.DataFrame cna_df: DataFrame with columns 'chrom', 'maploc', 'start', 'end', 'null_ratios_mean', 'null_ratios_sd', 'ratios', 'weights' and 'zscores' for each genomic bin
+        0 value ratios need to be replaced by NaN
+        0 value weights need to be replaced by a very small number to avoid division by zero in CBS
+        Assumes dataframe is sorted by chrom and maploc
     :param argparse.Namespace args: Command-line arguments namespace
-    :return: DataFrame with columns 'sample', 'chrom', 'loc.start', 'loc.end', 'num_mark' and 'seg.mean' for each genomic segment
+    :return: DataFrame with columns 'chrom', 'start', 'end', 'num_mark' and 'ratio' for each genomic segment
     :rtype: pd.DataFrame
     """
 
@@ -268,10 +271,6 @@ def exec_cbs(cna_df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
     script_path = Path(__file__).parent / "include" / "CBS.R"
 
     # Preprocess CNA dataframe for CBS input
-    # replace 0s with NaN
-    cna_df["ratios"][cna_df["ratios"] == 0] = np.nan
-    # replace 0s with a very small number to avoid division by zero in CBS
-    cna_df["weights"][cna_df["weights"] == 0] = np.nextafter(0, 1)
     # filter out chromosomes with no valid bins to avoid CBS errors
     cna_df = cna_df.groupby("chrom").filter(
         lambda x: x["ratios"].notna().any()
@@ -329,107 +328,132 @@ def exec_cbs(cna_df: pd.DataFrame, args: argparse.Namespace) -> pd.DataFrame:
             sys.exit(1)
 
         with cbs_output.open() as f:
-            return pd.read_json(f, orient="records")
+            segments_df = pd.read_json(f, orient="records")
+            segments_df = segments_df.rename(
+                columns={
+                    "chrom": "chrom",
+                    "loc.start": "start",
+                    "loc.end": "end",
+                    "seg.mean": "ratio",
+                }
+            )
+            return segments_df[["chrom", "start", "end", "ratio"]]
 
 
-def get_segment_z_score(segments_df: pd.DataFrame, cna_df: pd.DataFrame):
+def get_segment_zscore(segments_df: pd.DataFrame, cna_df: pd.DataFrame):
     """
     Calculate Z-scores for genomic segments against a baseline.
 
     For each segment in segment:
         1. Slices background data (ratios, filters, weights) to the segment coordinates.
-        2. Filters out bad genomic bins where the filter matrix (results_r) equals 0.
+        2. Filters out bad genomic bins where the filter matrix (ratios) equals 0.
         3. Cleans data by replacing infinite values with NaN.
         4. Computes a column-wise weighted average across the segment slice.
         5. Establishes a null model by calculating the mean and SD of those averages.
         6. Computes the segment's Z-score: (observed_value - null_mean) / null_sd.
         7. Returns "nan" if the baseline mean or SD cannot be mathematically resolved.
 
-    :param pd.DataFrame segments_df: DataFrame with columns 'sample', 'chrom', 'loc.start', 'loc.end', 'num_mark' and 'seg.mean' for each genomic segment
-    :param pd.DataFrame cna_df: DataFrame with columns 'chrom', 'maploc', 'null_ratios_mean', 'null_ratios_sd', 'ratios', 'weights' and 'zscores' for each genomic bin
+    :param pd.DataFrame segments_df: DataFrame with columns 'chrom', 'start', 'end' and 'ratio' for each genomic segment
+    :param pd.DataFrame cna_df: DataFrame with columns 'chrom', 'maploc', 'start', 'end', 'null_ratios_mean', 'null_ratios_sd', 'ratios', 'weights' and 'zscores' for each genomic bin
 
     Returns:
-        segments dataframe with an extra column of Z-scores corresponding to each segment in the input dataFrame with invalid calculations marked as "nan".
+        segments dataframe with 'chrom', 'start', 'end', 'ratio' and 'zscore' columns with invalid calculations marked as "NaN".
     """
+    # Create copies to avoid SettingWithCopyWarning or modifying user inputs unexpectedly
+    segments_df_copy = segments_df.copy()
+    cna_df_copy = cna_df.copy()
 
-    # --- STEP 1: Vectorized Slicing via Conditional Merge ---
-    # We join segments and cna_filtered on chromosomes, then filter rows
-    # where the maploc falls within the segment's start and end boundaries.
+    segments_reset = segments_df_copy.reset_index().rename(
+        columns={"index": "seg_idx"}
+    )
     merged = pd.merge(
-        segments_df.reset_index().rename(columns={"index": "seg_idx"}),
-        cna_df,
+        segments_reset,
+        cna_df_copy,
         on="chrom",
         suffixes=("_seg", "_cna"),
     )
 
     # Keep only the genomic bins that physically sit inside each segment's window
-    in_window = merged["maploc"].between(
-        merged["loc.start"], merged["loc.end"]
-    )
+    in_window = merged["maploc"].between(merged["start"], merged["end"])
     matched_bins = merged[in_window].copy()
 
-    # If no bins matched any segments, append 'nan' column and exit early
+    # --- STEP 2: Filter out bad genomic bins where the filter matrix (ratios) equals 0 ---
+    matched_bins = matched_bins[matched_bins["ratios"] != 0].copy()
+
+    # --- STEP 3: Clean data by replacing infinite values with NaN ---
+    cols_to_clean = ["ratios", "weights", "null_ratios_mean", "null_ratios_sd"]
+    for col in cols_to_clean:
+        if col in matched_bins.columns:
+            matched_bins[col] = matched_bins[col].replace(
+                [np.inf, -np.inf], np.nan
+            )
+
     if matched_bins.empty:
-        result_df = segments_df.copy()
-        result_df["z_score"] = "nan"
-        return result_df
+        segments_df["zscore"] = "nan"
+        return segments_df
 
-    # --- STEP 4 & 5: Vectorized Null Model Math via Groupby ---
-    # Pre-calculate weighted products for the weighted mean formula
-    matched_bins["weighted_ratios"] = (
-        matched_bins["ratios"] * matched_bins["weights"]
+    # Under the independent bins assumption, combining the null mean and SD for each bin:
+    # null_mean = sum(w_i * null_ratios_mean_i) / sum(w_i)
+    # null_sd = sqrt(sum(w_i^2 * null_ratios_sd_i^2)) / sum(w_i)
+    valid_null = (
+        matched_bins["null_ratios_mean"].notna()
+        & matched_bins["null_ratios_sd"].notna()
+        & matched_bins["weights"].notna()
+        & (matched_bins["weights"] > 0)
     )
 
-    # Group by the unique segment index to calculate mean and SD simultaneously in C-speed
+    matched_bins["w_mean"] = np.where(
+        valid_null,
+        matched_bins["null_ratios_mean"] * matched_bins["weights"],
+        np.nan,
+    )
+    matched_bins["w_var"] = np.where(
+        valid_null,
+        (matched_bins["null_ratios_sd"] ** 2) * (matched_bins["weights"] ** 2),
+        np.nan,
+    )
+    matched_bins["w_denom"] = np.where(
+        valid_null, matched_bins["weights"], np.nan
+    )
+
     grouped = matched_bins.groupby("seg_idx")
-
     stats = grouped.agg(
-        total_weights=("weights", "sum"),
-        sum_weighted_ratios=("weighted_ratios", "sum"),
-        null_mean=("ratios", "mean"),
-        null_sd=(
-            "ratios",
-            lambda x: x.std(ddof=0),
-        ),  # Population standard deviation
+        sum_w_mean=("w_mean", "sum"),
+        sum_w_var=("w_var", "sum"),
+        sum_w_denom=("w_denom", "sum"),
     )
 
-    # Calculate the localized weighted null mean
-    stats["null_weighted_mean"] = np.where(
-        stats["total_weights"] > 0,
-        stats["sum_weighted_ratios"] / stats["total_weights"],
+    stats["null_mean"] = np.where(
+        stats["sum_w_denom"] > 0,
+        stats["sum_w_mean"] / stats["sum_w_denom"],
+        np.nan,
+    )
+    stats["null_sd"] = np.where(
+        stats["sum_w_denom"] > 0,
+        np.sqrt(stats["sum_w_var"]) / stats["sum_w_denom"],
         np.nan,
     )
 
-    # --- STEP 6, 7 & 8: Compute and Clamp Z-scores Matrix-wide ---
-    # Join the computed stats back onto the original segments frame
+    # Join computed stats back onto the original segments
     result_df = segments_df.copy()
-    result_df = result_df.join(stats)
+    result_df = result_df.join(stats[["null_mean", "null_sd"]])
 
-    # Evaluate mathematical validity globally
     invalid_mask = (
         result_df["null_mean"].isna()
         | result_df["null_sd"].isna()
         | (result_df["null_sd"] == 0)
-        | result_df["total_weights"].isna()
     )
 
-    # Compute raw Z-scores matrix-wide
-    z_raw = (
-        result_df["seg.mean"] - result_df["null_weighted_mean"]
-    ) / result_df["null_sd"]
-
-    # Apply capping and fill invalid boundaries
-    result_df["z_score"] = np.clip(z_raw, -1000, 1000)
-    result_df.loc[invalid_mask, "z_score"] = "nan"
-
-    # Drop the temporary calculation helper columns before returning
-    columns_to_drop = [
-        "total_weights",
-        "sum_weighted_ratios",
-        "null_mean",
-        "null_sd",
-        "null_weighted_mean",
+    # Compute raw Z-scores
+    z_raw = (result_df["ratio"] - result_df["null_mean"]) / result_df[
+        "null_sd"
     ]
-    result_df = result_df.drop(columns=columns_to_drop, errors="ignore")
 
-    return result_df
+    # Fill invalid boundaries with "nan"
+    z_score_series = z_raw.astype(object)
+    z_score_series[invalid_mask] = "nan"
+
+    # Assign to segment DataFrames
+    segments_df["zscore"] = z_score_series
+
+    return segments_df
