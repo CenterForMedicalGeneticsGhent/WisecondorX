@@ -253,19 +253,3 @@ After this, `ruff` lint and format checks will run automatically on every
 ```bash
 pixi run hooks
 ```
-
-# Dependencies
-
-- R (v4.3.3) packages
-  - jsonlite (v1.8.8)
-- R Bioconductor packages
-  - DNAcopy (v1.76.0)
-- Python (>= 3.10) libraries
-  - scipy (v1.17.1)
-  - scikit-learn (v1.8.0)
-  - pysam (v0.23.3)
-  - numpy (v2.4.3)
-  - matplotlib (v3.10.8)
-  - pandas (v3.0.1)
-
-And of course, other versions are very likely to work as well.
