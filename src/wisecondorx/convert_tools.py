@@ -116,9 +116,6 @@ def wcx_convert(
             bam_chr = local_reads_file.fetch(chromosome)
             for read in bam_chr:
                 read_start = read.reference_start
-                if read_start < 0:
-                    continue
-
                 if read.is_paired:
                     if not read.is_proper_pair:
                         local_reads_pairf += 1
@@ -167,7 +164,9 @@ def wcx_convert(
     reads_per_chromosome_bin: dict[str, Optional[np.ndarray]] = dict()
     for index, chromosome in enumerate(reads_file.references):
         if re.match(
-            r"^(chr)?([1-9]|1[0-9]|2[0-2]|X|Y?)$", chromosome, re.IGNORECASE
+            r"^(?:chr)?(?:[1-9]|1[1-9]|2[0-2]|[XY])$",
+            chromosome,
+            re.IGNORECASE,
         ):
             chr_num = chromosome.lower().lstrip("chr")
             if chr_num == "x":
