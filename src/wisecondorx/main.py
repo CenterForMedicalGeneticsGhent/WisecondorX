@@ -11,6 +11,7 @@ import argparse
 from pathlib import Path
 from wisecondorx.convert import wcx_convert
 from wisecondorx.convert import load_convert_output
+from wisecondorx.newref import wcx_newref
 from wisecondorx.overall_tools import gender_correct, scale_sample, Sex
 from wisecondorx.predict_control import normalize, get_post_processed_result
 from wisecondorx.predict_output import generate_output_tables
