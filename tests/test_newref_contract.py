@@ -11,7 +11,7 @@ from tests._test_utils import make_ref_arrays
 
 class TestNewrefContract(unittest.TestCase):
     def test_tool_newref_merge_keeps_predict_contract_keys(self):
-        from wisecondorx.newref_control import tool_newref_merge
+        from wisecondorx.newref import tool_newref_merge
 
         def _write_component(path, gender, n_chr):
             bins_per_chr = [1] * n_chr
@@ -104,7 +104,7 @@ class TestNewrefContract(unittest.TestCase):
                 merged.close()
 
     def test_tool_newref_prep_male_pruning_keeps_autosomes_and_chry(self):
-        from wisecondorx.newref_control import tool_newref_prep
+        from wisecondorx.newref import tool_newref_prep
 
         bins_per_chr = [10] * 24
         total_bins = int(np.sum(bins_per_chr))
@@ -145,11 +145,11 @@ class TestNewrefContract(unittest.TestCase):
             )
             with (
                 patch(
-                    "wisecondorx.newref_control.normalize_and_mask",
+                    "wisecondorx.newref.normalize_and_mask",
                     side_effect=fake_normalize_and_mask,
                 ),
                 patch(
-                    "wisecondorx.newref_control.train_pca",
+                    "wisecondorx.newref.train_pca",
                     side_effect=fake_train_pca,
                 ),
             ):
@@ -173,7 +173,7 @@ class TestNewrefContract(unittest.TestCase):
     def test_tool_newref_prep_autosomal_pruning_still_applies_in_a_branch(
         self,
     ):
-        from wisecondorx.newref_control import tool_newref_prep
+        from wisecondorx.newref import tool_newref_prep
 
         bins_per_chr = [10] * 22
         total_bins = int(np.sum(bins_per_chr))
@@ -211,11 +211,11 @@ class TestNewrefContract(unittest.TestCase):
             )
             with (
                 patch(
-                    "wisecondorx.newref_control.normalize_and_mask",
+                    "wisecondorx.newref.normalize_and_mask",
                     side_effect=fake_normalize_and_mask,
                 ),
                 patch(
-                    "wisecondorx.newref_control.train_pca",
+                    "wisecondorx.newref.train_pca",
                     side_effect=fake_train_pca,
                 ),
             ):
