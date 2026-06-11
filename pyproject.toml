@@ -31,6 +31,7 @@ dependencies = [
     "pysam>=0.23",
     "numpy>=2.4",
     "pandas>=3.0",
+    "pyarrow>=17",
     "matplotlib>=3.10",
 ]
 
@@ -74,6 +75,7 @@ scipy = "1.17.*"
 scikit-learn = "1.8.*"
 numpy = "2.4.*"
 pandas = "3.0.*"
+pyarrow = ">=17"
 matplotlib-base = "3.10.*"
 r-jsonlite = ">=1.8"
 bioconductor-dnacopy = ">=1.76"
