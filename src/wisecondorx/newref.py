@@ -514,7 +514,7 @@ def _split_by_chr(start, end, chr_bin_sums):
         tmp[0] = i
         if val >= end:
             break
-        if start < val < end:
+        if start < val:
             tmp[2] = val
             areas.append(tmp)
             tmp = [i, val, 0]
