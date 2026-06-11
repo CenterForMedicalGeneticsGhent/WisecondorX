@@ -9,7 +9,7 @@ import numpy as np
 import typer
 import argparse
 from pathlib import Path
-from wisecondorx.convert_tools import wcx_convert
+from wisecondorx.convert import wcx_convert
 from wisecondorx.newref_control import (
     tool_newref_prep,
     tool_newref_main,
