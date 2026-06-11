@@ -330,7 +330,7 @@ def train_gender_model(args, samples):
         logging.info(
             "Image written to {}, now quitting ...".format(args.plotyfrac)
         )
-        exit()
+        sys.exit()
 
     if args.yfrac is not None:
         cut_off = args.yfrac
