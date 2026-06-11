@@ -525,6 +525,14 @@ def wcx_gender(
         print("female")
 
 
+def wcx_version() -> None:
+    """
+    Print the WisecondorX version.
+    """
+
+    print(VERSION)
+
+
 app = typer.Typer(
     name="wisecondorx",
     help="WisecondorX: Copy Number Aberration detection from Whole Genome Sequencing data.",
@@ -534,6 +542,7 @@ app.command(name="convert")(wcx_convert)
 app.command(name="newref")(wcx_newref)
 app.command(name="gender")(wcx_gender)
 app.command(name="predict")(wcx_predict)
+app.command(name="version")(wcx_version)
 
 
 @app.callback()
