@@ -286,7 +286,7 @@ def wcx_convert(
         "pair_fail": reads_pairf,
     }
 
-    if out_format.value in {"npz", "both"}:
+    if out_format in {"npz", "both"}:
         np.savez_compressed(
             Path(f"{prefix}.npz"),
             binsize=binsize,
@@ -294,7 +294,7 @@ def wcx_convert(
             quality=np.array(qual_info, dtype=object),
         )
 
-    if out_format.value in {"parquet", "both"}:
+    if out_format in {"parquet", "both"}:
         counts_frames = []
         chr_meta = []
         for chr_num in sorted(reads_per_chromosome_bin.keys(), key=int):
