@@ -9,7 +9,8 @@ import numpy as np
 import typer
 import argparse
 from pathlib import Path
-from wisecondorx.convert_tools import wcx_convert
+from wisecondorx.convert import wcx_convert
+from wisecondorx.convert import load_convert_output
 from wisecondorx.newref import wcx_newref
 from wisecondorx.overall_tools import gender_correct, scale_sample, Sex
 from wisecondorx.predict_control import normalize, get_post_processed_result
@@ -164,14 +165,10 @@ def wcx_predict(
 
     logging.info("Importing data ...")
     ref_file = np.load(args.reference, encoding="latin1", allow_pickle=True)
-    sample_file = np.load(args.infile, encoding="latin1", allow_pickle=True)
-
-    sample = sample_file["sample"].item()
+    sample, sample_binsize = load_convert_output(args.infile)
     n_reads = sum([sum(sample[x]) for x in sample.keys()])
 
-    sample = scale_sample(
-        sample, int(sample_file["binsize"].item()), int(ref_file["binsize"])
-    )
+    sample = scale_sample(sample, sample_binsize, int(ref_file["binsize"]))
 
     gender = predict_gender(sample, ref_file["trained_cutoff"])
     if not ref_file["is_nipt"]:
@@ -324,10 +321,8 @@ def wcx_gender(
     """
 
     ref_file = np.load(reference, encoding="latin1", allow_pickle=True)
-    sample_file = np.load(infile, encoding="latin1", allow_pickle=True)
-    gender = predict_gender(
-        sample_file["sample"].item(), ref_file["trained_cutoff"]
-    )
+    sample, _ = load_convert_output(infile)
+    gender = predict_gender(sample, ref_file["trained_cutoff"])
     if gender == "M":
         print("male")
     else:

@@ -2,21 +2,83 @@
 
 import logging
 import os
+import re
+import json
 
-import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
-
+import pyarrow as pa
+import pyarrow.parquet as pq
 import numpy as np
-import re
+import pandas as pd
 import pysam
 import typer
 from pathlib import Path
+from enum import Enum
+
+
+def load_convert_output(infile: Path) -> tuple[dict[str, np.ndarray], int]:
+    """
+    Load a conversion output file produced by wcx_convert.
+
+    Supports the legacy .npz contract and the single-file parquet format.
+    """
+
+    if infile.suffix == ".npz":
+        npzdata = np.load(infile, encoding="latin1", allow_pickle=True)
+        try:
+            sample = npzdata["sample"].item()
+            binsize = int(npzdata["binsize"])
+        finally:
+            npzdata.close()
+        return sample, binsize
+
+    if infile.suffix == ".parquet":
+        try:
+            import pyarrow.parquet as pq  # type: ignore[import-not-found]
+        except (ImportError, ModuleNotFoundError) as error:
+            raise ValueError(
+                "Parquet input requires pyarrow to be installed"
+            ) from error
+
+        table = pq.read_table(infile)
+        metadata = table.schema.metadata or {}
+
+        try:
+            binsize = int(metadata[b"wisecondorx.binsize"].decode("utf-8"))
+        except KeyError as error:
+            raise ValueError(
+                "Parquet input is missing required metadata key: binsize"
+            ) from error
+
+        df = table.to_pandas()
+        sample: dict[str, np.ndarray] = {}
+        for chr_num in sorted(df["chr"].drop_duplicates().astype(int)):
+            chr_df = df[df["chr"] == chr_num].sort_values("bin")
+            sample[str(int(chr_num))] = chr_df["count"].to_numpy()
+
+        return sample, binsize
+
+    raise ValueError(
+        "Unsupported conversion output format: {}".format(infile.suffix)
+    )
+
+
+class ConvertOutput(Enum):
+    BOTH = "both"
+    NPZ = "npz"
+    PARQUET = "parquet"
 
 
 def wcx_convert(
     infile: Path = typer.Argument(
-        ..., help="aligned reads input for conversion (.bam or .cram)"
+        ...,
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+        help="aligned reads input for conversion (.bam or .cram)",
     ),
     prefix: Path = typer.Argument(..., help="Output prefix"),
     reference: Path = typer.Option(
@@ -24,6 +86,11 @@ def wcx_convert(
         "-r",
         "--reference",
         help="Fasta reference to be used during cram conversion",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
     ),
     binsize: int = typer.Option(5000, "--binsize", help="Bin size (bp)"),
     normdup: bool = typer.Option(
@@ -36,16 +103,21 @@ def wcx_convert(
         min=1,
         help="Number of threads for per-chromosome parallel conversion",
     ),
+    out_format: ConvertOutput = typer.Option(
+        ConvertOutput.NPZ,
+        "--out-format",
+        "-o",
+        case_sensitive=False,
+        show_default=True,
+        help='Output format, options are "npz", "parquet", or "both"',
+    ),
 ) -> None:
     """
-    Convert and filter aligned reads to .npz format.
+    Convert and filter aligned reads to .npz or parquet format.
     """
 
     reads_file: pysam.AlignmentFile
-    # check if infile exists and has an index
-    if not (infile.exists() and infile.is_file()):
-        logging.error(f"Input file {infile} does not exist or is not a file.")
-        sys.exit(1)
+    # check if infile has an index
     if infile.suffix == ".bam":
         if (
             not infile.with_suffix(infile.suffix + ".bai").exists()
@@ -58,12 +130,9 @@ def wcx_convert(
         reads_file = pysam.AlignmentFile(str(infile), "rb")
     elif infile.suffix == ".cram":
         if not reference:
-            logging.error(
+            raise typer.BadParameter(
                 "Cram inputs need a reference fasta provided through the '--reference' flag."
             )
-        elif not reference.exists():
-            logging.fatal(f"Fasta reference file {reference} does not exist.")
-            sys.exit(1)
         if not infile.with_suffix(infile.suffix + ".crai").exists():
             logging.warning(
                 f"Input file {infile} does not have an index (.crai). Indexing prior to analysis..."
@@ -71,6 +140,10 @@ def wcx_convert(
             pysam.index(str(infile))
         reads_file = pysam.AlignmentFile(
             str(infile), "rc", reference_filename=str(reference)
+        )
+    else:
+        raise typer.BadParameter(
+            f"Input file {infile} should have extension .bam or .cram"
         )
 
     logging.info("Importing data ...")
@@ -213,11 +286,65 @@ def wcx_convert(
         "pair_fail": reads_pairf,
     }
 
-    np.savez_compressed(
-        Path(f"{prefix}.npz"),
-        binsize=binsize,
-        sample=reads_per_chromosome_bin,
-        quality=qual_info,
-    )
+    if out_format in {ConvertOutput.NPZ, ConvertOutput.BOTH}:
+        np.savez_compressed(
+            Path(f"{prefix}.npz"),
+            binsize=binsize,
+            sample=np.array(reads_per_chromosome_bin, dtype=object),
+            quality=np.array(qual_info, dtype=object),
+        )
 
+    if out_format in {ConvertOutput.PARQUET, ConvertOutput.BOTH}:
+        counts_frames = []
+        chr_meta = []
+        for chr_num in sorted(reads_per_chromosome_bin.keys(), key=int):
+            counts = reads_per_chromosome_bin[chr_num]
+            if counts is None:
+                continue
+            chr_int = int(chr_num)
+            counts_frames.append(
+                pd.DataFrame(
+                    {
+                        "chr": np.full(len(counts), chr_int, dtype=np.int16),
+                        "bin": np.arange(len(counts), dtype=np.int32),
+                        "count": counts.astype(np.int32, copy=False),
+                    }
+                )
+            )
+            chr_meta.append(
+                {
+                    "chr": chr_int,
+                    "n_bins": int(len(counts)),
+                    "binsize": int(binsize),
+                }
+            )
+
+        counts_df = (
+            pd.concat(counts_frames, ignore_index=True)
+            if counts_frames
+            else pd.DataFrame(columns=["chr", "bin", "count"])
+        )
+
+        table = pa.Table.from_pandas(counts_df, preserve_index=False)
+        metadata = dict(table.schema.metadata or {})
+        metadata.update(
+            {
+                b"wisecondorx.schema": b"convert-counts-v1",
+                b"wisecondorx.binsize": str(int(binsize)).encode("utf-8"),
+                b"wisecondorx.quality": json.dumps(
+                    qual_info, separators=(",", ":")
+                ).encode("utf-8"),
+                b"wisecondorx.chromosomes": json.dumps(
+                    chr_meta, separators=(",", ":")
+                ).encode("utf-8"),
+            }
+        )
+        table = table.replace_schema_metadata(metadata)
+        pq.write_table(
+            table,
+            Path(f"{prefix}.parquet"),
+            compression="zstd",
+        )
+
+    reads_file.close()
     logging.info("Finished conversion")

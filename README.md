@@ -83,6 +83,8 @@ wisecondorx convert input.bam/cram output.npz [--optional arguments]
 | `--reference x`                | Fasta reference to be used with cram inputs                                                                                                                                                              |
 | `--binsize x`                  | Size per bin in bp; the reference bin size should be a multiple of this value. Note that this parameter does not impact the resolution, yet it can be used to optimize processing speed (default: x=5e3) |
 | `--normdup`                    | Use this flag to avoid duplicate removal                                                                                                                                                                 |
+| `--threads x`                  | Number of threads for per-chromosome parallel conversion (default: all available CPU cores)                                                                                                            |
+| `--out-format x`               | Output format for conversion results: `npz` (default), `parquet`, or `both`. Parquet writes a single `prefix.parquet` file with flat count rows (`chr`, `bin`, `count`) and embedded metadata      |
 
 &rarr; Bash recipe at `docs/include/pipeline/convert.sh`
 
