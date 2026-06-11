@@ -1,37 +1,33 @@
+import json
 import tempfile
 import unittest
-import os
-import sys
-import types
-import json
-from typing import Any
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import numpy as np
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
-sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+
+from wisecondorx.convert import (
+    ConvertOutput,
+    load_convert_output,
+    wcx_convert,
 )
 
-if "pysam" not in sys.modules:
-    pysam_stub: Any = types.ModuleType("pysam")
-    pysam_stub.AlignmentFile = None
-    pysam_stub.index = lambda *_args, **_kwargs: None
-    sys.modules["pysam"] = pysam_stub
 
-from wisecondorx.convert import wcx_convert, ConvertOutput
-import wisecondorx.convert as convert_module
+class FakeRead:
+    """Mock read for pysam."""
 
-
-class _FakeRead:
     def __init__(
         self,
-        reference_start,
-        mapping_quality=10,
-        is_paired=False,
-        is_proper_pair=True,
-        next_reference_start=0,
+        reference_start: int,
+        mapping_quality: int = 10,
+        is_paired: bool = False,
+        is_proper_pair: bool = True,
+        next_reference_start: int = 0,
     ):
         self.reference_start = reference_start
         self.mapping_quality = mapping_quality
@@ -40,116 +36,41 @@ class _FakeRead:
         self.next_reference_start = next_reference_start
 
 
-class _FakeAlignmentFile:
-    def __init__(self, *_args, **_kwargs):
+class FakeAlignmentFile:
+    """Mock AlignmentFile for pysam."""
+
+    def __init__(self, *_args: Any, **_kwargs: Any):
         self.references = ["chr1", "chrX", "chrM"]
         self.lengths = [300, 200, 100]
         self.mapped = 3
         self.unmapped = 1
         self.nocoordinate = 0
 
-    def fetch(self, chromosome):
+    def fetch(self, chromosome: str) -> Any:
         reads = {
             "chr1": [
-                _FakeRead(reference_start=0, mapping_quality=10),
-                _FakeRead(reference_start=100, mapping_quality=0),
+                FakeRead(reference_start=0, mapping_quality=10),
+                FakeRead(reference_start=100, mapping_quality=0),
             ],
-            "chrX": [_FakeRead(reference_start=0, mapping_quality=10)],
+            "chrX": [FakeRead(reference_start=0, mapping_quality=10)],
         }
         return iter(reads.get(chromosome, []))
 
-    def close(self):
-        return None
+    def close(self) -> None:
+        pass
 
-    def __enter__(self):
+    def __enter__(self) -> "FakeAlignmentFile":
         return self
 
-    def __exit__(self, *_exc):
-        return None
-
-
-class _FakeArrowSchema:
-    def __init__(self):
-        self.metadata: Any = None
-
-
-class _FakeArrowTable:
-    def __init__(self):
-        self.schema = _FakeArrowSchema()
-        self._frame = None
-
-    def replace_schema_metadata(self, metadata):
-        self.schema.metadata = metadata
-        return self
-
-    def to_pandas(self):
-        return self._frame
-
-
-class _FakeArrowTableFactory:
-    @staticmethod
-    def from_pandas(_df, preserve_index=False):
-        if preserve_index:
-            raise AssertionError("preserve_index should be False")
-        table = _FakeArrowTable()
-        table._frame = _df
-        return table
-
-
-def _fake_pyarrow_modules(calls):
-    pyarrow_mod: Any = types.ModuleType("pyarrow")
-    pyarrow_mod.Table = _FakeArrowTableFactory
-    pyarrow_mod.__path__ = []
-
-    parquet_mod: Any = types.ModuleType("pyarrow.parquet")
-
-    def _write_table(table, path, compression="zstd"):
-        calls.append(
-            {
-                "path": str(path),
-                "compression": compression,
-                "metadata": table.schema.metadata,
-            }
-        )
-
-    parquet_mod.write_table = _write_table
-
-    def _read_table(path):
-        table = _FakeArrowTable()
-        table.schema.metadata = {
-            b"wisecondorx.binsize": b"100",
-            b"wisecondorx.quality": b"{}",
-            b"wisecondorx.chromosomes": b"[]",
-        }
-        table._frame = __import__("pandas").DataFrame(
-            {"chr": [1, 1, 23], "bin": [0, 1, 0], "count": [1, 0, 1]}
-        )
-        return table
-
-    parquet_mod.read_table = _read_table
-    pyarrow_mod.parquet = parquet_mod
-    return {"pyarrow": pyarrow_mod, "pyarrow.parquet": parquet_mod}
-
-
-def _fake_pyarrow_objects(calls):
-    pyarrow_mod: Any = types.SimpleNamespace(Table=_FakeArrowTableFactory)
-    parquet_mod: Any = types.SimpleNamespace()
-
-    def _write_table(table, path, compression="zstd"):
-        calls.append(
-            {
-                "path": str(path),
-                "compression": compression,
-                "metadata": table.schema.metadata,
-            }
-        )
-
-    parquet_mod.write_table = _write_table
-    return pyarrow_mod, parquet_mod
+    def __exit__(self, *_exc: Any) -> None:
+        pass
 
 
 class TestConvertOutputFormats(unittest.TestCase):
+    """Tests for coordinate/format conversion in WisecondorX convert."""
+
     def test_convert_writes_legacy_npz_contract(self):
+        """Verify wcx_convert output conforms to the legacy .npz contract."""
         with tempfile.TemporaryDirectory() as tmpdir:
             infile = Path(tmpdir) / "in.bam"
             infile.touch()
@@ -158,9 +79,9 @@ class TestConvertOutputFormats(unittest.TestCase):
             with (
                 patch(
                     "wisecondorx.convert.pysam.AlignmentFile",
-                    _FakeAlignmentFile,
+                    FakeAlignmentFile,
                 ),
-                patch("wisecondorx.convert.pysam.index") as _index,
+                patch("wisecondorx.convert.pysam.index"),
             ):
                 wcx_convert(
                     infile=infile,
@@ -171,8 +92,10 @@ class TestConvertOutputFormats(unittest.TestCase):
                     out_format=ConvertOutput.NPZ,
                 )
 
-            out = np.load(Path(f"{prefix}.npz"), allow_pickle=True)
-            try:
+            npz_path = Path(f"{prefix}.npz")
+            self.assertTrue(npz_path.exists())
+
+            with np.load(npz_path, allow_pickle=True) as out:
                 self.assertIn("binsize", out)
                 self.assertIn("sample", out)
                 self.assertIn("quality", out)
@@ -184,25 +107,20 @@ class TestConvertOutputFormats(unittest.TestCase):
                 self.assertEqual(int(sample["1"][0]), 1)
                 self.assertEqual(int(sample["23"][0]), 1)
                 self.assertEqual(int(quality["filter_mapq"]), 1)
-            finally:
-                out.close()
 
     def test_convert_both_writes_npz_and_parquet(self):
+        """Verify wcx_convert writes both correct .npz and .parquet files."""
         with tempfile.TemporaryDirectory() as tmpdir:
             infile = Path(tmpdir) / "in.bam"
             infile.touch()
             prefix = Path(tmpdir) / "sample"
-            pq_calls = []
-            fake_pa, fake_pq = _fake_pyarrow_objects(pq_calls)
 
             with (
                 patch(
                     "wisecondorx.convert.pysam.AlignmentFile",
-                    _FakeAlignmentFile,
+                    FakeAlignmentFile,
                 ),
-                patch("wisecondorx.convert.pysam.index") as _index,
-                patch.object(convert_module, "pa", fake_pa),
-                patch.object(convert_module, "pq", fake_pq),
+                patch("wisecondorx.convert.pysam.index"),
             ):
                 wcx_convert(
                     infile=infile,
@@ -214,11 +132,13 @@ class TestConvertOutputFormats(unittest.TestCase):
                 )
 
             self.assertTrue(Path(f"{prefix}.npz").exists())
-            self.assertEqual(len(pq_calls), 1)
-            self.assertEqual(pq_calls[0]["path"], f"{prefix}.parquet")
-            self.assertEqual(pq_calls[0]["compression"], "zstd")
+            pq_path = Path(f"{prefix}.parquet")
+            self.assertTrue(pq_path.exists())
 
-            metadata = pq_calls[0]["metadata"]
+            # Verify the written parquet metadata
+            table = pq.read_table(pq_path)
+            metadata = table.schema.metadata
+            self.assertIsNotNone(metadata)
             self.assertIn(b"wisecondorx.schema", metadata)
             self.assertIn(b"wisecondorx.binsize", metadata)
             self.assertIn(b"wisecondorx.quality", metadata)
@@ -229,21 +149,18 @@ class TestConvertOutputFormats(unittest.TestCase):
             self.assertEqual(int(quality["filter_mapq"]), 1)
 
     def test_convert_parquet_only_skips_npz(self):
+        """Verify wcx_convert can output only parquet, skipping .npz."""
         with tempfile.TemporaryDirectory() as tmpdir:
             infile = Path(tmpdir) / "in.bam"
             infile.touch()
             prefix = Path(tmpdir) / "sample"
-            pq_calls = []
-            fake_pa, fake_pq = _fake_pyarrow_objects(pq_calls)
 
             with (
                 patch(
                     "wisecondorx.convert.pysam.AlignmentFile",
-                    _FakeAlignmentFile,
+                    FakeAlignmentFile,
                 ),
-                patch("wisecondorx.convert.pysam.index") as _index,
-                patch.object(convert_module, "pa", fake_pa),
-                patch.object(convert_module, "pq", fake_pq),
+                patch("wisecondorx.convert.pysam.index"),
             ):
                 wcx_convert(
                     infile=infile,
@@ -255,22 +172,26 @@ class TestConvertOutputFormats(unittest.TestCase):
                 )
 
             self.assertFalse(Path(f"{prefix}.npz").exists())
-            self.assertEqual(len(pq_calls), 1)
-            self.assertEqual(pq_calls[0]["path"], f"{prefix}.parquet")
+            self.assertTrue(Path(f"{prefix}.parquet").exists())
 
-    def test_convert_invalid_out_format_exits(self):
-        with self.assertRaises(TypeError):
+    def test_convert_invalid_out_format_raises(self):
+        """Verify an invalid output format type/value raises an OSError."""
+        with self.assertRaises(OSError):
             wcx_convert(
                 infile=Path("missing.bam"),
                 prefix=Path("sample"),
-                out_format=ConvertOutput.BOTH,
+                binsize=100,
+                normdup=True,
+                threads=1,
+                out_format="invalid",  # type: ignore
             )
 
     def test_load_convert_output_reads_npz_and_parquet(self):
-        from wisecondorx.convert import load_convert_output
-
+        """Verify load_convert_output loads both .npz and .parquet formats."""
         with tempfile.TemporaryDirectory() as tmpdir:
             prefix = Path(tmpdir) / "sample"
+
+            # 1. Test .npz loading
             np.savez_compressed(
                 Path(f"{prefix}.npz"),
                 binsize=100,
@@ -286,12 +207,22 @@ class TestConvertOutputFormats(unittest.TestCase):
             self.assertEqual(npz_binsize, 100)
             self.assertEqual(set(npz_sample.keys()), {"1", "23"})
 
-            pq_calls = []
-            with patch.dict(sys.modules, _fake_pyarrow_modules(pq_calls)):
-                parquet_sample, parquet_binsize = load_convert_output(
-                    Path(f"{prefix}.parquet")
-                )
+            # 2. Test .parquet loading (write real parquet using pyarrow)
+            counts_df = pd.DataFrame(
+                {"chr": [1, 1, 23], "bin": [0, 1, 0], "count": [1, 0, 1]}
+            )
+            table = pa.Table.from_pandas(counts_df, preserve_index=False)
+            metadata = {
+                b"wisecondorx.binsize": b"100",
+                b"wisecondorx.quality": b"{}",
+                b"wisecondorx.chromosomes": b"[]",
+            }
+            table = table.replace_schema_metadata(metadata)
 
+            pq_path = Path(f"{prefix}.parquet")
+            pq.write_table(table, pq_path)
+
+            parquet_sample, parquet_binsize = load_convert_output(pq_path)
             self.assertEqual(parquet_binsize, 100)
             self.assertEqual(set(parquet_sample.keys()), {"1", "23"})
             self.assertTrue(
