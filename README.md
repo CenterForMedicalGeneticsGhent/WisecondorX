@@ -75,7 +75,7 @@ There are three main stages (converting, reference creating and predicting) when
 
 ```bash
 
-WisecondorX convert input.bam/cram output.npz [--optional arguments]
+wisecondorx convert input.bam/cram output.npz [--optional arguments]
 ```
 
 | <br>Optional argument <br><br> | Function                                                                                                                                                                                                 |
@@ -90,7 +90,7 @@ WisecondorX convert input.bam/cram output.npz [--optional arguments]
 
 ```bash
 
-WisecondorX newref reference_input_dir/*.npz reference_output.npz [--optional arguments]
+wisecondorx newref reference_input_dir/*.npz reference_output.npz [--optional arguments]
 ```
 
 | <br>Optional argument <br><br> | Function                                                                                                                                    |
@@ -108,7 +108,7 @@ WisecondorX newref reference_input_dir/*.npz reference_output.npz [--optional ar
 
 ```bash
 
-WisecondorX predict test_input.npz reference_input.npz output_id [--optional arguments]
+wisecondorx predict test_input.npz reference_input.npz output_id [--optional arguments]
 ```
 
 | <br>Optional argument <br><br> | Function                                                                                                                                                                                                                          |
@@ -135,10 +135,16 @@ WisecondorX predict test_input.npz reference_input.npz output_id [--optional arg
 
 ```bash
 
-WisecondorX gender test_input.npz reference_input.npz
+wisecondorx gender test_input.npz reference_input.npz
 ```
 
 Returns gender according to the reference.
+
+```bash
+wisecondorx version
+```
+
+Prints the installed WisecondorX version.
 
 # Parameters
 
