@@ -7,8 +7,8 @@ import json
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
-import pyarrow as pa  # type: ignore[import-not-found]
-import pyarrow.parquet as pq  # type: ignore[import-not-found]
+import pyarrow as pa
+import pyarrow.parquet as pq
 import numpy as np
 import pandas as pd
 import pysam

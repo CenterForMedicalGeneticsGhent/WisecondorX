@@ -20,7 +20,8 @@ if "pysam" not in sys.modules:
     pysam_stub.index = lambda *_args, **_kwargs: None
     sys.modules["pysam"] = pysam_stub
 
-from wisecondorx.convert import wcx_convert
+from wisecondorx.convert import wcx_convert, ConvertOutput
+import wisecondorx.convert as convert_module
 
 
 class _FakeRead:
@@ -130,6 +131,23 @@ def _fake_pyarrow_modules(calls):
     return {"pyarrow": pyarrow_mod, "pyarrow.parquet": parquet_mod}
 
 
+def _fake_pyarrow_objects(calls):
+    pyarrow_mod: Any = types.SimpleNamespace(Table=_FakeArrowTableFactory)
+    parquet_mod: Any = types.SimpleNamespace()
+
+    def _write_table(table, path, compression="zstd"):
+        calls.append(
+            {
+                "path": str(path),
+                "compression": compression,
+                "metadata": table.schema.metadata,
+            }
+        )
+
+    parquet_mod.write_table = _write_table
+    return pyarrow_mod, parquet_mod
+
+
 class TestConvertOutputFormats(unittest.TestCase):
     def test_convert_writes_legacy_npz_contract(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -150,7 +168,7 @@ class TestConvertOutputFormats(unittest.TestCase):
                     binsize=100,
                     normdup=True,
                     threads=1,
-                    out_format="npz",
+                    out_format=ConvertOutput.NPZ,
                 )
 
             out = np.load(Path(f"{prefix}.npz"), allow_pickle=True)
@@ -175,6 +193,7 @@ class TestConvertOutputFormats(unittest.TestCase):
             infile.touch()
             prefix = Path(tmpdir) / "sample"
             pq_calls = []
+            fake_pa, fake_pq = _fake_pyarrow_objects(pq_calls)
 
             with (
                 patch(
@@ -182,7 +201,8 @@ class TestConvertOutputFormats(unittest.TestCase):
                     _FakeAlignmentFile,
                 ),
                 patch("wisecondorx.convert.pysam.index") as _index,
-                patch.dict(sys.modules, _fake_pyarrow_modules(pq_calls)),
+                patch.object(convert_module, "pa", fake_pa),
+                patch.object(convert_module, "pq", fake_pq),
             ):
                 wcx_convert(
                     infile=infile,
@@ -190,7 +210,7 @@ class TestConvertOutputFormats(unittest.TestCase):
                     binsize=100,
                     normdup=True,
                     threads=1,
-                    out_format="both",
+                    out_format=ConvertOutput.BOTH,
                 )
 
             self.assertTrue(Path(f"{prefix}.npz").exists())
@@ -214,6 +234,7 @@ class TestConvertOutputFormats(unittest.TestCase):
             infile.touch()
             prefix = Path(tmpdir) / "sample"
             pq_calls = []
+            fake_pa, fake_pq = _fake_pyarrow_objects(pq_calls)
 
             with (
                 patch(
@@ -221,7 +242,8 @@ class TestConvertOutputFormats(unittest.TestCase):
                     _FakeAlignmentFile,
                 ),
                 patch("wisecondorx.convert.pysam.index") as _index,
-                patch.dict(sys.modules, _fake_pyarrow_modules(pq_calls)),
+                patch.object(convert_module, "pa", fake_pa),
+                patch.object(convert_module, "pq", fake_pq),
             ):
                 wcx_convert(
                     infile=infile,
@@ -229,7 +251,7 @@ class TestConvertOutputFormats(unittest.TestCase):
                     binsize=100,
                     normdup=True,
                     threads=1,
-                    out_format="parquet",
+                    out_format=ConvertOutput.PARQUET,
                 )
 
             self.assertFalse(Path(f"{prefix}.npz").exists())
@@ -237,11 +259,11 @@ class TestConvertOutputFormats(unittest.TestCase):
             self.assertEqual(pq_calls[0]["path"], f"{prefix}.parquet")
 
     def test_convert_invalid_out_format_exits(self):
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(TypeError):
             wcx_convert(
                 infile=Path("missing.bam"),
                 prefix=Path("sample"),
-                out_format="csv",
+                out_format=ConvertOutput.BOTH,
             )
 
     def test_load_convert_output_reads_npz_and_parquet(self):

@@ -70,16 +70,16 @@ platforms = ["linux-64", "osx-arm64"]
 
 [tool.pixi.dependencies]
 python = ">=3.10"
-pysam = "0.23.*"
+pysam = "0.24.*"
 scipy = "1.17.*"
-scikit-learn = "1.8.*"
+scikit-learn = "1.9.*"
 numpy = "2.4.*"
 pandas = "3.0.*"
-pyarrow = ">=17"
+pyarrow = "24.*"
 matplotlib-base = "3.10.*"
-r-jsonlite = ">=1.8"
-bioconductor-dnacopy = ">=1.76"
-typer = ">=0.24.0,<0.25"
+r-jsonlite = "2.*"
+bioconductor-dnacopy = "1.86.*"
+typer = "0.26.*"
 
 [tool.pixi.pypi-dependencies]
 wisecondorx = { path = ".", editable = true }
