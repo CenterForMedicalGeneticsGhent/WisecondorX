@@ -5,15 +5,16 @@ import os
 import re
 import json
 
-import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
-
+import pyarrow as pa  # type: ignore[import-not-found]
+import pyarrow.parquet as pq  # type: ignore[import-not-found]
 import numpy as np
 import pandas as pd
 import pysam
 import typer
 from pathlib import Path
+from enum import Enum
 
 
 def load_convert_output(infile: Path) -> tuple[dict[str, np.ndarray], int]:
@@ -63,9 +64,21 @@ def load_convert_output(infile: Path) -> tuple[dict[str, np.ndarray], int]:
     )
 
 
+class ConvertOutput(Enum):
+    BOTH = "both"
+    NPZ = "npz"
+    PARQUET = "parquet"
+
+
 def wcx_convert(
     infile: Path = typer.Argument(
-        ..., help="aligned reads input for conversion (.bam or .cram)"
+        ...,
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+        help="aligned reads input for conversion (.bam or .cram)",
     ),
     prefix: Path = typer.Argument(..., help="Output prefix"),
     reference: Path = typer.Option(
@@ -73,6 +86,11 @@ def wcx_convert(
         "-r",
         "--reference",
         help="Fasta reference to be used during cram conversion",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
     ),
     binsize: int = typer.Option(5000, "--binsize", help="Bin size (bp)"),
     normdup: bool = typer.Option(
@@ -85,10 +103,13 @@ def wcx_convert(
         min=1,
         help="Number of threads for per-chromosome parallel conversion",
     ),
-    out_format: str = typer.Option(
-        "npz",
+    out_format: ConvertOutput = typer.Option(
+        ConvertOutput.NPZ,
         "--out-format",
-        help="Output format: npz, parquet, or both",
+        "-o",
+        case_sensitive=False,
+        show_default=True,
+        help='Output format, options are "npz", "parquet", or "both"',
     ),
 ) -> None:
     """
@@ -96,19 +117,7 @@ def wcx_convert(
     """
 
     reads_file: pysam.AlignmentFile
-    out_format = out_format.lower()
-    if out_format not in {"npz", "parquet", "both"}:
-        logging.error(
-            "Invalid --out-format '{}'. Use one of: npz, parquet, both.".format(
-                out_format
-            )
-        )
-        sys.exit(1)
-
-    # check if infile exists and has an index
-    if not (infile.exists() and infile.is_file()):
-        logging.error(f"Input file {infile} does not exist or is not a file.")
-        sys.exit(1)
+    # check if infile has an index
     if infile.suffix == ".bam":
         if (
             not infile.with_suffix(infile.suffix + ".bai").exists()
@@ -121,13 +130,9 @@ def wcx_convert(
         reads_file = pysam.AlignmentFile(str(infile), "rb")
     elif infile.suffix == ".cram":
         if not reference:
-            logging.error(
+            raise typer.BadParameter(
                 "Cram inputs need a reference fasta provided through the '--reference' flag."
             )
-            sys.exit(1)
-        elif not reference.exists():
-            logging.fatal(f"Fasta reference file {reference} does not exist.")
-            sys.exit(1)
         if not infile.with_suffix(infile.suffix + ".crai").exists():
             logging.warning(
                 f"Input file {infile} does not have an index (.crai). Indexing prior to analysis..."
@@ -137,10 +142,9 @@ def wcx_convert(
             str(infile), "rc", reference_filename=str(reference)
         )
     else:
-        logging.error(
-            "Input file {} should have extension .bam or .cram".format(infile)
+        raise typer.BadParameter(
+            f"Input file {infile} should have extension .bam or .cram"
         )
-        sys.exit(1)
 
     logging.info("Importing data ...")
 
@@ -282,7 +286,7 @@ def wcx_convert(
         "pair_fail": reads_pairf,
     }
 
-    if out_format in {"npz", "both"}:
+    if out_format.value in {"npz", "both"}:
         np.savez_compressed(
             Path(f"{prefix}.npz"),
             binsize=binsize,
@@ -290,7 +294,7 @@ def wcx_convert(
             quality=np.array(qual_info, dtype=object),
         )
 
-    if out_format in {"parquet", "both"}:
+    if out_format.value in {"parquet", "both"}:
         counts_frames = []
         chr_meta = []
         for chr_num in sorted(reads_per_chromosome_bin.keys(), key=int):
@@ -321,13 +325,6 @@ def wcx_convert(
             else pd.DataFrame(columns=["chr", "bin", "count"])
         )
 
-        try:
-            import pyarrow as pa  # type: ignore[import-not-found]
-            import pyarrow.parquet as pq  # type: ignore[import-not-found]
-        except (ImportError, ModuleNotFoundError) as error:
-            logging.error("Parquet output requires pyarrow: {}".format(error))
-            sys.exit(1)
-
         table = pa.Table.from_pandas(counts_df, preserve_index=False)
         metadata = dict(table.schema.metadata or {})
         metadata.update(
@@ -348,6 +345,6 @@ def wcx_convert(
             Path(f"{prefix}.parquet"),
             compression="zstd",
         )
-    reads_file.close()
 
+    reads_file.close()
     logging.info("Finished conversion")
