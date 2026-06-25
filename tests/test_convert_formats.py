@@ -66,6 +66,30 @@ class FakeAlignmentFile:
         pass
 
 
+class FakeAlignmentFileChr10:
+    """Mock AlignmentFile containing chr10 for regression coverage."""
+
+    def __init__(self, *_args: Any, **_kwargs: Any):
+        self.references = ["chr10"]
+        self.lengths = [200]
+        self.mapped = 1
+        self.unmapped = 0
+        self.nocoordinate = 0
+
+    def fetch(self, chromosome: str) -> Any:
+        reads = {"chr10": [FakeRead(reference_start=0, mapping_quality=10)]}
+        return iter(reads.get(chromosome, []))
+
+    def close(self) -> None:
+        pass
+
+    def __enter__(self) -> "FakeAlignmentFileChr10":
+        return self
+
+    def __exit__(self, *_exc: Any) -> None:
+        pass
+
+
 class TestConvertOutputFormats(unittest.TestCase):
     """Tests for coordinate/format conversion in WisecondorX convert."""
 
@@ -107,6 +131,33 @@ class TestConvertOutputFormats(unittest.TestCase):
                 self.assertEqual(int(sample["1"][0]), 1)
                 self.assertEqual(int(sample["23"][0]), 1)
                 self.assertEqual(int(quality["filter_mapq"]), 1)
+
+    def test_convert_includes_chr10_in_npz_output(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            infile = Path(tmpdir) / "in.bam"
+            infile.touch()
+            prefix = Path(tmpdir) / "sample"
+
+            with (
+                patch(
+                    "wisecondorx.convert.pysam.AlignmentFile",
+                    FakeAlignmentFileChr10,
+                ),
+                patch("wisecondorx.convert.pysam.index"),
+            ):
+                wcx_convert(
+                    infile=infile,
+                    prefix=prefix,
+                    binsize=100,
+                    normdup=True,
+                    threads=1,
+                    out_format=ConvertOutput.NPZ,
+                )
+
+            with np.load(Path(f"{prefix}.npz"), allow_pickle=True) as out:
+                sample = out["sample"].item()
+                self.assertIn("10", sample)
+                self.assertEqual(int(sample["10"][0]), 1)
 
     def test_convert_both_writes_npz_and_parquet(self):
         """Verify wcx_convert writes both correct .npz and .parquet files."""
