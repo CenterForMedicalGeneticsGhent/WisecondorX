@@ -237,7 +237,7 @@ def wcx_convert(
     reads_per_chromosome_bin: dict[str, Optional[np.ndarray]] = dict()
     for index, chromosome in enumerate(reads_file.references):
         if re.match(
-            r"^(?:chr)?(?:[1-9]|1[1-9]|2[0-2]|[XY])$",
+            r"^(?:chr)?(?:[1-9]|1[0-9]|2[0-2]|[XY])$",
             chromosome,
             re.IGNORECASE,
         ):
