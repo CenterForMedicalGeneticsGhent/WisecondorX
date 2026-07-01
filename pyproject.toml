@@ -26,13 +26,14 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "scipy>=1.17",
-    "scikit-learn>=1.8",
-    "pysam>=0.23",
+    "matplotlib>=3.10",
     "numpy>=2.4",
     "pandas>=3.0",
-    "pyarrow>=17",
-    "matplotlib>=3.10",
+    "pyarrow>=24",
+    "pysam>=0.24",
+    "scikit-learn>=1.9",
+    "scipy>=1.17",
+    "typer>=0.26",
 ]
 
 [project.optional-dependencies]
@@ -69,16 +70,16 @@ channels = ["conda-forge", "bioconda"]
 platforms = ["linux-64", "osx-arm64"]
 
 [tool.pixi.dependencies]
-python = ">=3.10"
-pysam = "0.24.*"
-scipy = "1.17.*"
-scikit-learn = "1.9.*"
+bioconductor-dnacopy = "1.86.*"
+matplotlib-base = "3.10.*"
 numpy = "2.4.*"
 pandas = "3.0.*"
 pyarrow = "24.*"
-matplotlib-base = "3.10.*"
+pysam = "0.24.*"
+python = ">=3.10"
 r-jsonlite = "2.*"
-bioconductor-dnacopy = "1.86.*"
+scikit-learn = "1.9.*"
+scipy = "1.17.*"
 typer = "0.26.*"
 
 [tool.pixi.pypi-dependencies]
