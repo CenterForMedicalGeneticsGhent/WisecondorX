@@ -17,6 +17,6 @@ while read LINE; do
     BAM=$(echo $LINE | awk -F ' ' '{print $2}')
 
     echo "Creating 5kb bins for sample ${SAMPLE}"
-    WisecondorX convert ${BAM} ${OUTPUT_DIR}/${SAMPLE}.npz
+    WisecondorX convert ${BAM} ${OUTPUT_DIR}/${SAMPLE}
 
 done < ${BAM_FILES}

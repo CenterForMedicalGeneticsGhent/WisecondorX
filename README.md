@@ -71,11 +71,11 @@ There are three main stages (converting, reference creating and predicting) when
       observe additional improvement concerning normalization.
 - Predict copy number alterations (using the reference file and test .npz cases of interest)
 
-### Stage (1) Convert aligned reads (bam/cram) to .npz
+### Stage (1) Convert aligned reads (bam/cram) to .npz or .parquet files
 
 ```bash
 
-wisecondorx convert input.bam/cram output.npz [--optional arguments]
+wisecondorx convert input.bam/cram output_prefix [--optional arguments]
 ```
 
 | <br>Optional argument <br><br> | Function                                                                                                                                                                                                 |
@@ -110,7 +110,7 @@ wisecondorx newref reference_input_dir/*.npz reference_output.npz [--optional ar
 
 ```bash
 
-wisecondorx predict test_input.npz reference_input.npz output_id [--optional arguments]
+wisecondorx predict test_input.npz reference_input.npz output_prefix [--optional arguments]
 ```
 
 | <br>Optional argument <br><br> | Function                                                                                                                                                                                                                          |
