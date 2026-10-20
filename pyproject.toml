@@ -52,7 +52,7 @@ wisecondorX = "wisecondorx.main:app"
 where = ["src"]
 
 [tool.setuptools.package-data]
-wisecondorx = ["*.R"]
+wisecondorx = ["include/*.R"]
 
 [tool.setuptools.dynamic]
 version = {attr = "wisecondorx.__version__"}
