@@ -1,8 +1,10 @@
 import os
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import gridspec
 import re
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib import gridspec
+from matplotlib.patches import Rectangle
 
 # Color scheme
 BLACK = "#3f3f3f"
@@ -172,7 +174,7 @@ def write_plots(data):
                 elif z_val > zcutoff:
                     color = COLOR_C
             else:
-                color = "grey"
+                color = (0.5, 0.5, 0.5)
 
         for idx in range(start_idx, min(end_idx + 1, len(dot_cols))):
             dot_cols[idx] = color
@@ -298,7 +300,7 @@ def write_plots(data):
         # In R it used AA, BB, CC with alpha. Here we use the base color with alpha
         face_color = list(color) + [0.3] if isinstance(color, tuple) else color
         ax_main.add_patch(
-            plt.Rectangle(
+            Rectangle(
                 (start, 0),
                 end - start,
                 height,
@@ -397,8 +399,8 @@ def write_plots(data):
     # Boxplots
     ax_box_auto.boxplot(
         box_list[:22],
-        labels=labels[:22],
-        flierprops=dict(marker="o", markersize=2, markerfacecolor=BLACK),
+        label=labels[:22],
+        flierprops={"marker": "o", "markersize": 2, "markerfacecolor": BLACK},
     )
     ax_box_auto.set_ylim(
         min(l_whis_per_chr[:22]) if l_whis_per_chr[:22] else -1,
@@ -411,8 +413,12 @@ def write_plots(data):
     if num_chrs > 22:
         ax_box_sex.boxplot(
             box_list[22:],
-            labels=labels[22:],
-            flierprops=dict(marker="o", markersize=2, markerfacecolor=BLACK),
+            label=labels[22:],
+            flierprops={
+                "marker": "o",
+                "markersize": 2,
+                "markerfacecolor": BLACK,
+            },
         )
         y_sex_down = min(l_whis_per_chr[22:]) if l_whis_per_chr[22:] else -1
         y_sex_up = max(h_whis_per_chr[22:]) if h_whis_per_chr[22:] else 1
@@ -498,7 +504,7 @@ def write_plots(data):
                 list(color) + [0.3] if isinstance(color, tuple) else color
             )
             ax_chr.add_patch(
-                plt.Rectangle(
+                Rectangle(
                     (seg_start, 0),
                     seg_end - seg_start,
                     height,
