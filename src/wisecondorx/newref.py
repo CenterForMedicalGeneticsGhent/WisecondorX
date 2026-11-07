@@ -1,25 +1,25 @@
 # WisecondorX
 
+import argparse
+import bisect
 import copy
 import logging
 import os
+import random
 import sys
 import time
+from concurrent import futures
+from pathlib import Path
+from typing import Annotated
 
 import numpy as np
-from concurrent import futures
-import bisect
-import random
-from pathlib import Path
 import typer
 from scipy.signal import argrelextrema
 from sklearn.decomposition import PCA
 from sklearn.mixture import GaussianMixture
-from wisecondorx.ref_qc import qc_reference
-from wisecondorx.overall_tools import gender_correct, scale_sample
-import argparse
-from typing import Annotated
 
+from wisecondorx.overall_tools import gender_correct, scale_sample
+from wisecondorx.ref_qc import qc_reference
 
 """
 Outputs preparation files of read depth normalized
@@ -99,9 +99,7 @@ def tool_newref_prep(args, samples, gender, mask, bins_per_chr):
         bad_bins_mask[class_mask] = class_bad_bins
         if np.any(class_bad_bins):
             logging.info(
-                "Removing {} anomalous {} bins based on PCA distance (cutoff={:.4f})".format(
-                    int(np.sum(class_bad_bins)), class_name, cutoff
-                )
+                f"Removing {int(np.sum(class_bad_bins))} anomalous {class_name} bins based on PCA distance (cutoff={cutoff:.4f})"
             )
 
     if np.any(bad_bins_mask):
@@ -161,7 +159,7 @@ def tool_newref_main(args, cpus):
     os.remove(args.prepfile)
     os.remove(args.prepdatafile)
     for part in range(1, cpus + 1):
-        os.remove("{}_{}.npz".format(args.partfile, str(part)))
+        os.remove(f"{args.partfile}_{part!s}.npz")
 
 
 def _tool_newref_part(args, pca_corrected_data):
@@ -171,16 +169,12 @@ def _tool_newref_part(args, pca_corrected_data):
     """
     if args.part[0] > args.part[1]:
         logging.critical(
-            "Part should be smaller or equal to total parts:{} > {} is wrong".format(
-                args.part[0], args.part[1]
-            )
+            f"Part should be smaller or equal to total parts:{args.part[0]} > {args.part[1]} is wrong"
         )
         sys.exit()
     if args.part[0] < 0:
         logging.critical(
-            "Part should be at least zero: {} < 0 is wrong".format(
-                args.part[0]
-            )
+            f"Part should be at least zero: {args.part[0]} < 0 is wrong"
         )
         sys.exit()
 
@@ -198,7 +192,7 @@ def _tool_newref_part(args, pca_corrected_data):
     )
 
     np.savez_compressed(
-        "{}_{}.npz".format(args.partfile, str(args.part[0])),
+        f"{args.partfile}_{args.part[0]!s}.npz",
         indexes=indexes,
         distances=distances,
         null_ratios=null_ratios,
@@ -216,7 +210,7 @@ def tool_newref_post(args, cpus):
     big_distances = []
     big_null_ratios = []
     for part in range(1, cpus + 1):
-        infile = "{}_{}.npz".format(args.partfile, str(part))
+        infile = f"{args.partfile}_{part!s}.npz"
         npzdata_part = np.load(infile, encoding="latin1")
         big_indexes.extend(npzdata_part["indexes"])
         big_distances.extend(npzdata_part["distances"])
@@ -254,9 +248,7 @@ def force_remove(file_id):
             break
         except Exception:
             print(
-                "Attemp #{}: Cannot remove {}, because it is busy, trying again...".format(
-                    attemp, file_id
-                )
+                f"Attemp #{attemp}: Cannot remove {file_id}, because it is busy, trying again..."
             )
             attemp = attemp + 1
             time.sleep(5)
@@ -274,10 +266,10 @@ def tool_newref_merge(args, outfiles, trained_cutoff):
         for component in [x for x in npz_file.keys() if x != "gender"]:
             if gender == "F":
                 final_ref["has_female"] = True
-                final_ref["{}.F".format(str(component))] = npz_file[component]
+                final_ref[f"{component!s}.F"] = npz_file[component]
             elif gender == "M":
                 final_ref["has_male"] = True
-                final_ref["{}.M".format(str(component))] = npz_file[component]
+                final_ref[f"{component!s}.M"] = npz_file[component]
             else:
                 final_ref[str(component)] = npz_file[component]
         force_remove(file_id)
@@ -327,9 +319,7 @@ def train_gender_model(args, samples):
         ax.set_xlim([0, 0.02])
         ax.legend(loc="best")
         plt.savefig(args.plotyfrac)
-        logging.info(
-            "Image written to {}, now quitting ...".format(args.plotyfrac)
-        )
+        logging.info(f"Image written to {args.plotyfrac}, now quitting ...")
         sys.exit()
 
     if args.yfrac is not None:
@@ -348,9 +338,7 @@ def train_gender_model(args, samples):
                 "No local minimum found, using mean of GMM components as fallback"
             )
 
-        logging.info(
-            "Determined --yfrac cutoff: {}".format(str(round(cut_off, 4)))
-        )
+        logging.info(f"Determined --yfrac cutoff: {round(cut_off, 4)!s}")
 
     genders[y_fractions > cut_off] = "M"
     genders[y_fractions < cut_off] = "F"
@@ -448,9 +436,7 @@ def get_reference(
 
     start_num, end_num = _get_part(part - 1, split_parts, bincount)
     logging.info(
-        "Working on thread {} of {}, meaning bins {} up to {}".format(
-            part, split_parts, start_num, end_num
-        )
+        f"Working on thread {part} of {split_parts}, meaning bins {start_num} up to {end_num}"
     )
     regions = _split_by_chr(start_num, end_num, masked_bins_per_chr_cum)
 
@@ -459,10 +445,8 @@ def get_reference(
         start = region[1]
         end = region[2]
 
-        if start_num > start:
-            start = start_num
-        if end_num < end:
-            end = end_num
+        start = max(start, start_num)
+        end = min(end, end_num)
 
         if len(masked_bins_per_chr_cum) > 22 and chr != 22 and chr != 23:
             part_indexes = np.zeros((end - start, ref_size), dtype=np.int32)
@@ -654,18 +638,18 @@ def wcx_newref(
     base_path = os.path.join(split_path[0], split_path[1])
 
     args.basepath = base_path
-    args.prepfile = "{}_prep.npz".format(base_path)
-    args.prepdatafile = "{}_prep_data.npy".format(base_path)
-    args.partfile = "{}_part".format(base_path)
+    args.prepfile = f"{base_path}_prep.npz"
+    args.prepdatafile = f"{base_path}_prep_data.npy"
+    args.partfile = f"{base_path}_part"
 
     samples = []
     logging.info("Importing data ...")
     for infile in args.infiles:
-        logging.info("Loading: {}".format(infile))
+        logging.info(f"Loading: {infile}")
         npzdata = np.load(infile, encoding="latin1", allow_pickle=True)
         sample = npzdata["sample"].item()
         binsize = int(npzdata["binsize"])
-        logging.info("Binsize: {}".format(int(binsize)))
+        logging.info(f"Binsize: {int(binsize)}")
         samples.append(scale_sample(sample, binsize, args.binsize))
 
     samples = np.array(samples)
@@ -690,7 +674,7 @@ def wcx_newref(
     outfiles = []
     if len(genders) > 9:
         logging.info("Starting autosomal reference creation ...")
-        args.tmpoutfile = "{}.tmp.A.npz".format(args.basepath)
+        args.tmpoutfile = f"{args.basepath}.tmp.A.npz"
         outfiles.append(args.tmpoutfile)
         tool_newref_prep(args, samples, "A", mask_A, bins_per_chr)
         logging.info("This might take a while ...")
@@ -703,7 +687,7 @@ def wcx_newref(
 
     if genders.count("F") > 4:
         logging.info("Starting female gonosomal reference creation ...")
-        args.tmpoutfile = "{}.tmp.F.npz".format(args.basepath)
+        args.tmpoutfile = f"{args.basepath}.tmp.F.npz"
         outfiles.append(args.tmpoutfile)
         mask_F = np.copy(mask_A)
         if mask_F_sex is not None:
@@ -721,7 +705,7 @@ def wcx_newref(
     if not args.nipt:
         if genders.count("M") > 4:
             logging.info("Starting male gonosomal reference creation ...")
-            args.tmpoutfile = "{}.tmp.M.npz".format(args.basepath)
+            args.tmpoutfile = f"{args.basepath}.tmp.M.npz"
             outfiles.append(args.tmpoutfile)
             mask_M = np.copy(mask_A)
             if mask_M_sex is not None:

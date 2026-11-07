@@ -1,14 +1,14 @@
 # WisecondorX
 
 import re
+
 import numpy as np
 
 from wisecondorx.overall_tools import (
-    get_z_score,
-    get_median_segment_variance,
     get_cpa,
+    get_median_segment_variance,
+    get_z_score,
 )
-
 
 """
 Calculates zz-scores, marks aberrations and
@@ -45,9 +45,7 @@ def _generate_bins_bed(rem_input, results):
                 r = "nan"
             if z == 0:
                 z = "nan"
-            feat_str = "{}:{}-{}".format(
-                chr_name, str(feat), str(feat + binsize - 1)
-            )
+            feat_str = f"{chr_name}:{feat!s}-{feat + binsize - 1!s}"
             row = [chr_name, feat, feat + binsize - 1, feat_str, r, z]
             bins_file.write("{}\n".format("\t".join([str(x) for x in row])))
             feat += binsize
@@ -241,21 +239,15 @@ def _generate_chr_statistics_file(rem_input, results):
     stats_file.write("Number of reads: {}\n".format(str(rem_input["n_reads"])))
 
     stats_file.write(
-        "Standard deviation of the ratios per chromosome: {}\n".format(
-            str(round(float(np.nanstd(chr_ratio_means)), 5))
-        )
+        f"Standard deviation of the ratios per chromosome: {round(float(np.nanstd(chr_ratio_means)), 5)!s}\n"
     )
 
     stats_file.write(
-        "Median segment variance per bin (doi: 10.1093/nar/gky1263): {}\n".format(
-            str(msv)
-        )
+        f"Median segment variance per bin (doi: 10.1093/nar/gky1263): {msv!s}\n"
     )
 
     stats_file.write(
-        "Copy number profile abnormality (CPA) score (doi: 10.1186/s13073-020-00735-4): {}\n".format(
-            str(cpa)
-        )
+        f"Copy number profile abnormality (CPA) score (doi: 10.1186/s13073-020-00735-4): {cpa!s}\n"
     )
 
     stats_file.close()

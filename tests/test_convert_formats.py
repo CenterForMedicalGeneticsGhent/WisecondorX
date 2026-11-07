@@ -10,7 +10,6 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-
 from wisecondorx.convert import (
     ConvertOutput,
     load_convert_output,
@@ -62,7 +61,7 @@ class FakeAlignmentFile:
     def __enter__(self) -> "FakeAlignmentFile":
         return self
 
-    def __exit__(self, *_exc: Any) -> None:
+    def __exit__(self, *_exc: object) -> None:
         pass
 
 
@@ -86,7 +85,7 @@ class FakeAlignmentFileChr10:
     def __enter__(self) -> "FakeAlignmentFileChr10":
         return self
 
-    def __exit__(self, *_exc: Any) -> None:
+    def __exit__(self, *_exc: object) -> None:
         pass
 
 

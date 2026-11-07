@@ -1,20 +1,19 @@
 # WisecondorX
 
+import json
 import logging
 import os
 import re
-import json
-
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
-import pyarrow as pa
-import pyarrow.parquet as pq
+from enum import Enum
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pysam
 import typer
-from pathlib import Path
-from enum import Enum
 
 
 def load_convert_output(infile: Path) -> tuple[dict[str, np.ndarray], int]:
@@ -59,9 +58,7 @@ def load_convert_output(infile: Path) -> tuple[dict[str, np.ndarray], int]:
 
         return sample, binsize
 
-    raise ValueError(
-        "Unsupported conversion output format: {}".format(infile.suffix)
-    )
+    raise ValueError(f"Unsupported conversion output format: {infile.suffix}")
 
 
 class ConvertOutput(Enum):
@@ -157,7 +154,7 @@ def wcx_convert(
     logging.info("Converting aligned reads")
 
     mode = "rb" if infile.suffix == ".bam" else "rc"
-    ref_filename: Optional[str] = str(reference) if reference else None
+    ref_filename: str | None = str(reference) if reference else None
 
     def process_chromosome(
         chromosome: str, chromosome_length: int, output_key: str
@@ -170,9 +167,7 @@ def wcx_convert(
         larp2 = -1
 
         logging.info(
-            "Working at {}; processing {} bins".format(
-                chromosome, int(chromosome_length / float(binsize) + 1)
-            )
+            f"Working at {chromosome}; processing {int(chromosome_length / float(binsize) + 1)} bins"
         )
         counts = np.zeros(
             int(chromosome_length / float(binsize) + 1),
@@ -234,7 +229,7 @@ def wcx_convert(
         )
 
     jobs: list[tuple[str, int, str]] = []
-    reads_per_chromosome_bin: dict[str, Optional[np.ndarray]] = dict()
+    reads_per_chromosome_bin: dict[str, np.ndarray | None] = dict()
     for index, chromosome in enumerate(reads_file.references):
         if re.match(
             r"^(?:chr)?(?:[1-9]|1[0-9]|2[0-2]|[XY])$",
@@ -314,7 +309,7 @@ def wcx_convert(
             chr_meta.append(
                 {
                     "chr": chr_int,
-                    "n_bins": int(len(counts)),
+                    "n_bins": len(counts),
                     "binsize": int(binsize),
                 }
             )

@@ -61,8 +61,8 @@ class TestNewrefContract(unittest.TestCase):
                 ]
                 for k in base_keys:
                     self.assertIn(k, merged.keys())
-                    self.assertIn("{}.F".format(k), merged.keys())
-                    self.assertIn("{}.M".format(k), merged.keys())
+                    self.assertIn(f"{k}.F", merged.keys())
+                    self.assertIn(f"{k}.M", merged.keys())
                 self.assertIn("has_female", merged.keys())
                 self.assertIn("has_male", merged.keys())
                 self.assertIn("is_nipt", merged.keys())
@@ -75,14 +75,14 @@ class TestNewrefContract(unittest.TestCase):
                 autosomal_prefix_a = merged["mask"][:autosomal_span_a]
                 for suffix in [".F", ".M"]:
                     autosomal_masked_s = int(
-                        merged["masked_bins_per_chr_cum{}".format(suffix)][21]
+                        merged[f"masked_bins_per_chr_cum{suffix}"][21]
                     )
                     self.assertEqual(autosomal_masked_s, autosomal_masked_a)
 
                     autosomal_span_s = int(
-                        np.sum(merged["bins_per_chr{}".format(suffix)][:22])
+                        np.sum(merged[f"bins_per_chr{suffix}"][:22])
                     )
-                    autosomal_prefix_s = merged["mask{}".format(suffix)][
+                    autosomal_prefix_s = merged[f"mask{suffix}"][
                         :autosomal_span_s
                     ]
                     self.assertTrue(
@@ -92,13 +92,13 @@ class TestNewrefContract(unittest.TestCase):
                     # Old predict appends A autosomes + branch gonosomal tail and then
                     # inflates against branch mask; lengths must align.
                     total_masked_s = int(
-                        merged["masked_bins_per_chr_cum{}".format(suffix)][-1]
+                        merged[f"masked_bins_per_chr_cum{suffix}"][-1]
                     )
                     gonosomal_tail_s = total_masked_s - autosomal_masked_s
                     appended_len = autosomal_masked_a + gonosomal_tail_s
                     self.assertEqual(
                         appended_len,
-                        int(np.sum(merged["mask{}".format(suffix)])),
+                        int(np.sum(merged[f"mask{suffix}"])),
                     )
             finally:
                 merged.close()

@@ -31,21 +31,21 @@ Normalize sample for read depth and apply mask.
 def coverage_normalize_and_mask(sample, ref_file, ap):
     by_chr = []
 
-    chrs = range(1, len(ref_file["bins_per_chr{}".format(ap)]) + 1)
+    chrs = range(1, len(ref_file[f"bins_per_chr{ap}"]) + 1)
 
     for chr in chrs:
         this_chr = np.zeros(
-            ref_file["bins_per_chr{}".format(ap)][chr - 1], dtype=float
+            ref_file[f"bins_per_chr{ap}"][chr - 1], dtype=float
         )
         min_len = min(
-            ref_file["bins_per_chr{}".format(ap)][chr - 1],
+            ref_file[f"bins_per_chr{ap}"][chr - 1],
             len(sample[str(chr)]),
         )
         this_chr[:min_len] = sample[str(chr)][:min_len]
         by_chr.append(this_chr)
     all_data = np.concatenate(by_chr, axis=0)
     all_data = all_data / np.sum(all_data)
-    masked_data = all_data[ref_file["mask{}".format(ap)]]
+    masked_data = all_data[ref_file[f"mask{ap}"]]
 
     return masked_data
 
@@ -56,8 +56,8 @@ Project test sample to PCA space.
 
 
 def project_pc(sample_data, ref_file, ap):
-    components = ref_file["pca_components{}".format(ap)]
-    mean = ref_file["pca_mean{}".format(ap)]
+    components = ref_file[f"pca_components{ap}"]
+    mean = ref_file[f"pca_mean{ap}"]
 
     centered_data = sample_data - mean
     transform = np.dot(centered_data, components.T)
@@ -75,7 +75,7 @@ depending on the within reference distances.
 def get_optimal_cutoff(ref_file, repeats):
     distances = ref_file["distances"]
     cutoff = float("inf")
-    for i in range(0, repeats):
+    for i in range(repeats):
         mask = distances < cutoff
         average = np.average(distances[mask])
         stddev = np.std(distances[mask])
@@ -112,13 +112,13 @@ def normalize_repeat(test_data, ref_file, optimal_cutoff, ct, cp, ap):
 def _normalize_once(
     test_data, test_copy, ref_file, optimal_cutoff, ct, cp, ap
 ):
-    masked_bins_per_chr = ref_file["masked_bins_per_chr{}".format(ap)]
-    masked_bins_per_chr_cum = ref_file["masked_bins_per_chr_cum{}".format(ap)]
+    masked_bins_per_chr = ref_file[f"masked_bins_per_chr{ap}"]
+    masked_bins_per_chr_cum = ref_file[f"masked_bins_per_chr_cum{ap}"]
     results_z = np.zeros(masked_bins_per_chr_cum[-1])[ct:]
     results_r = np.zeros(masked_bins_per_chr_cum[-1])[ct:]
     ref_sizes = np.zeros(masked_bins_per_chr_cum[-1])[ct:]
-    indexes = ref_file["indexes{}".format(ap)]
-    distances = ref_file["distances{}".format(ap)]
+    indexes = ref_file[f"indexes{ap}"]
+    distances = ref_file[f"distances{ap}"]
 
     i = ct
     i2 = 0
@@ -155,9 +155,7 @@ CBS, Z-scoring and plotting.
 
 
 def get_weights(ref_file, ap):
-    inverse_weights = [
-        np.mean(np.sqrt(x)) for x in ref_file["distances{}".format(ap)]
-    ]
+    inverse_weights = [np.mean(np.sqrt(x)) for x in ref_file[f"distances{ap}"]]
     weights = np.array([1 / x for x in inverse_weights])
     return weights
 
@@ -234,7 +232,7 @@ def _import_bed(rem_input):
         if chr_name == "Y":
             chr_name = "24"
         chr = int(chr_name) - 1
-        if chr not in bed.keys():
+        if chr not in bed:
             bed[chr] = []
         bed[chr].append(
             [
@@ -262,8 +260,8 @@ def exec_cbs(rem_input, results):
         "seed": str(rem_input["args"].seed),
         "results_r": results["results_r"],
         "results_w": results["results_w"],
-        "infile": str("{}_01.json".format(json_cbs_dir)),
-        "outfile": str("{}_02.json".format(json_cbs_dir)),
+        "infile": str(f"{json_cbs_dir}_01.json"),
+        "outfile": str(f"{json_cbs_dir}_02.json"),
     }
 
     results_c = _get_processed_cbs(exec_R(json_dict))

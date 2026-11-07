@@ -62,7 +62,7 @@ line-length = 79
 target-version = "py310"
 
 [tool.ruff.lint]
-ignore = ["E266", "E501", "C901"]
+
 
 # --- Pixi configuration ---------------------------------------------------
 [tool.pixi.workspace]
