@@ -4,6 +4,8 @@ from pathlib import Path
 
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
 MINREFBINS = 150
 OUTLIER_N_SIGMA = 3
 CHRY_MIN_USABLE_PCT_WARN = 50.0
@@ -85,7 +87,7 @@ def _compute_metrics(ref, suf):
     if n_bins == 0:
         return {"n_bins": 0}
 
-    mean_d, max_d, n_refs = _compute_per_bin_stats(indexes, distances)
+    mean_d, _max_d, n_refs = _compute_per_bin_stats(indexes, distances)
     valid = np.isfinite(mean_d)
     n_valid = int(np.sum(valid))
     if n_valid == 0:
@@ -239,7 +241,7 @@ def qc_reference(npz_path: Path):
     """
     npz = Path(npz_path).resolve()
     if not npz.exists():
-        logging.error(f"QC check skipped: file not found: {npz}")
+        logger.error(f"QC check skipped: file not found: {npz}")
         return 2
 
     if npz.suffix == ".npz":
@@ -250,22 +252,22 @@ def qc_reference(npz_path: Path):
     ref = np.load(npz, encoding="latin1", allow_pickle=True)
     try:
         binsize = int(np.atleast_1d(ref["binsize"])[0])
-    except Exception:
+    except (KeyError, IndexError, ValueError, TypeError):
         binsize = None
 
     suffixes = _get_gender_suffixes(ref)
     if not suffixes:
-        logging.error(
+        logger.error(
             "QC failed: no bins_per_chr / bins_per_chr.F / bins_per_chr.M in npz"
         )
         ref.close()
         return 2
 
-    logging.info(f"Starting ref-QC for file: {npz}")
+    logger.info(f"Starting ref-QC for file: {npz}")
     if binsize:
-        logging.info(f"Reference binsize: {binsize} bp")
+        logger.info(f"Reference binsize: {binsize} bp")
     else:
-        logging.info("Reference binsize: (unknown)")
+        logger.info("Reference binsize: (unknown)")
 
     worst = 0  # 0 pass, 1 warn, 2 fail
     compat_issues = _legacy_autosomal_prefix_compat_issues(ref)
@@ -278,7 +280,7 @@ def qc_reference(npz_path: Path):
     }
 
     for issue in compat_issues:
-        logging.error(f"[COMPAT] {issue}")
+        logger.error(f"[COMPAT] {issue}")
     if compat_issues:
         worst = max(worst, 2)
 
@@ -286,13 +288,13 @@ def qc_reference(npz_path: Path):
         label = "F" if suf == ".F" else "M" if suf == ".M" else "A"
         m = _compute_metrics(ref, suf)
         if m is None:
-            logging.warning(f"[{label}] no indexes/distances — skip")
+            logger.warning(f"[{label}] no indexes/distances — skip")
             continue
 
         qc_data["metrics"][label] = {"n_bins": m.get("n_bins")}
 
         if m.get("n_valid", 0) == 0:
-            logging.error(f"[{label}] n_bins={m['n_bins']}, n_valid=0 — FAIL")
+            logger.error(f"[{label}] n_bins={m['n_bins']}, n_valid=0 — FAIL")
             worst = max(worst, 2)
             qc_data["metrics"][label]["n_valid"] = 0
             qc_data["metrics"][label]["verdict"] = "FAIL"
@@ -316,12 +318,12 @@ def qc_reference(npz_path: Path):
 
         if verdict == "FAIL":
             worst = max(worst, 2)
-            logger_func = logging.error
+            logger_func = logger.error
         elif verdict == "WARN":
             worst = max(worst, 1)
-            logger_func = logging.warning
+            logger_func = logger.warning
         else:
-            logger_func = logging.info
+            logger_func = logger.info
 
         logger_func(
             f"[{label}] n_bins={m['n_bins']}, mean(dist)={m['mean_of_means']:.4f}, std(dist)={m['std_of_means']:.4f}, "
@@ -341,13 +343,13 @@ def qc_reference(npz_path: Path):
     ref.close()
 
     if worst == 0:
-        logging.info("QC Overall Verdict: PASS")
+        logger.info("QC Overall Verdict: PASS")
         qc_data["overall_verdict"] = "PASS"
     elif worst == 1:
-        logging.warning("QC Overall Verdict: WARN (review metrics above)")
+        logger.warning("QC Overall Verdict: WARN (review metrics above)")
         qc_data["overall_verdict"] = "WARN"
     else:
-        logging.error(
+        logger.error(
             "QC Overall Verdict: FAIL (ref may cause poor predictions; consider rebuilding or more samples)"
         )
         qc_data["overall_verdict"] = "FAIL"
@@ -357,8 +359,8 @@ def qc_reference(npz_path: Path):
     try:
         with open(out_json, "w") as f:
             json.dump(qc_data, f, indent=4)
-        logging.info(f"Wrote structured QC data to {out_json}")
-    except Exception as e:
-        logging.error(f"Failed to write structured QC data to {out_json}: {e}")
+        logger.info(f"Wrote structured QC data to {out_json}")
+    except (OSError, TypeError, ValueError) as e:
+        logger.error(f"Failed to write structured QC data to {out_json}: {e}")
 
     return worst

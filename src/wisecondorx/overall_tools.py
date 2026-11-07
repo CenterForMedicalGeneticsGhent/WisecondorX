@@ -11,6 +11,8 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 
+logger = logging.getLogger(__name__)
+
 """
 Scales the bin size of a sample.npz to the one  
 requested for the reference
@@ -33,12 +35,12 @@ def scale_sample(sample, from_size, to_size):
         or to_size < from_size
         or to_size % from_size > 0
     ):
-        logging.critical(
+        logger.critical(
             f"Impossible binsize scaling requested: {int(from_size)} to {int(to_size)}"
         )
         sys.exit()
 
-    return_sample = dict()
+    return_sample = {}
     scale = to_size / from_size
     for chr_name in sample:
         chr_data = sample[chr_name]
@@ -75,21 +77,23 @@ R_script, respectively.
 
 
 def exec_R(json_dict):
-    json.dump(json_dict, open(json_dict["infile"], "w"))
+    with open(json_dict["infile"], "w") as f:
+        json.dump(json_dict, f)
 
     r_cmd = ["Rscript", json_dict["R_script"], "--infile", json_dict["infile"]]
-    logging.debug(f"CBS cmd: {r_cmd}")
+    logger.debug(f"CBS cmd: {r_cmd}")
 
     try:
         subprocess.check_call(r_cmd)
     except subprocess.CalledProcessError as e:
-        logging.critical(f"Rscript failed: {e}")
+        logger.critical(f"Rscript failed: {e}")
         sys.exit()
-    if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
+    if logger.getEffectiveLevel() > logging.DEBUG:
         os.remove(json_dict["infile"])
-    if "outfile" in json_dict.keys():
-        json_out = json.load(open(json_dict["outfile"]))
-        if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
+    if "outfile" in json_dict:
+        with open(json_dict["outfile"]) as f:
+            json_out = json.load(f)
+        if logger.getEffectiveLevel() > logging.DEBUG:
             os.remove(json_dict["outfile"])
         return json_out
 

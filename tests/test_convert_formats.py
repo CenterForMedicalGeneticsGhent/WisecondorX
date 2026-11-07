@@ -2,7 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 from unittest.mock import patch
 
 import numpy as np
@@ -58,7 +58,7 @@ class FakeAlignmentFile:
     def close(self) -> None:
         pass
 
-    def __enter__(self) -> "FakeAlignmentFile":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_exc: object) -> None:
@@ -82,7 +82,7 @@ class FakeAlignmentFileChr10:
     def close(self) -> None:
         pass
 
-    def __enter__(self) -> "FakeAlignmentFileChr10":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_exc: object) -> None:
