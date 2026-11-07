@@ -7,6 +7,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from enum import Enum
 from pathlib import Path
+from typing import Annotated
 
 import numpy as np
 import pandas as pd
@@ -14,6 +15,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pysam
 import typer
+
+logger = logging.getLogger(__name__)
 
 
 def load_convert_output(infile: Path) -> tuple[dict[str, np.ndarray], int]:
@@ -68,46 +71,57 @@ class ConvertOutput(Enum):
 
 
 def wcx_convert(
-    infile: Path = typer.Argument(
-        ...,
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        readable=True,
-        resolve_path=True,
-        help="aligned reads input for conversion (.bam or .cram)",
-    ),
-    prefix: Path = typer.Argument(..., help="Output prefix"),
-    reference: Path = typer.Option(
-        None,
-        "-r",
-        "--reference",
-        help="Fasta reference to be used during cram conversion",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        readable=True,
-        resolve_path=True,
-    ),
-    binsize: int = typer.Option(5000, "--binsize", help="Bin size (bp)"),
-    normdup: bool = typer.Option(
-        False, "--normdup", help="Do not remove duplicates"
-    ),
-    threads: int = typer.Option(
-        os.cpu_count() or 1,
-        "--threads",
-        "-t",
-        min=1,
-        help="Number of threads for per-chromosome parallel conversion",
-    ),
-    out_format: ConvertOutput = typer.Option(
-        ConvertOutput.NPZ,
-        "--out-format",
-        "-o",
-        case_sensitive=False,
-        show_default=True,
-        help='Output format, options are "npz", "parquet", or "both"',
-    ),
+    infile: Annotated[
+        Path,
+        typer.Argument(
+            ...,
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            resolve_path=True,
+            help="aligned reads input for conversion (.bam or .cram)",
+        ),
+    ],
+    prefix: Annotated[Path, typer.Argument(..., help="Output prefix")],
+    reference: Annotated[
+        Path | None,
+        typer.Option(
+            "-r",
+            "--reference",
+            help="Fasta reference to be used during cram conversion",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            resolve_path=True,
+        ),
+    ] = None,
+    binsize: Annotated[
+        int, typer.Option("--binsize", help="Bin size (bp)")
+    ] = 5000,
+    normdup: Annotated[
+        bool, typer.Option("--normdup", help="Do not remove duplicates")
+    ] = False,
+    threads: Annotated[
+        int,
+        typer.Option(
+            "--threads",
+            "-t",
+            min=1,
+            help="Number of threads for per-chromosome parallel conversion",
+        ),
+    ] = os.cpu_count() or 1,
+    out_format: Annotated[
+        ConvertOutput,
+        typer.Option(
+            "--out-format",
+            "-o",
+            case_sensitive=False,
+            show_default=True,
+            help='Output format, options are "npz", "parquet", or "both"',
+        ),
+    ] = ConvertOutput.NPZ,
 ) -> None:
     """
     Convert and filter aligned reads to .npz or parquet format.
@@ -120,7 +134,7 @@ def wcx_convert(
             not infile.with_suffix(infile.suffix + ".bai").exists()
             and not infile.with_suffix(infile.suffix + ".csi").exists()
         ):
-            logging.warning(
+            logger.warning(
                 f"Input file {infile} does not have an index (.bai, .csi). Indexing prior to analysis..."
             )
             pysam.index(str(infile))
@@ -131,7 +145,7 @@ def wcx_convert(
                 "Cram inputs need a reference fasta provided through the '--reference' flag."
             )
         if not infile.with_suffix(infile.suffix + ".crai").exists():
-            logging.warning(
+            logger.warning(
                 f"Input file {infile} does not have an index (.crai). Indexing prior to analysis..."
             )
             pysam.index(str(infile))
@@ -143,7 +157,7 @@ def wcx_convert(
             f"Input file {infile} should have extension .bam or .cram"
         )
 
-    logging.info("Importing data ...")
+    logger.info("Importing data ...")
 
     reads_seen = 0
     reads_kept = 0
@@ -151,7 +165,7 @@ def wcx_convert(
     reads_rmdup = 0
     reads_pairf = 0
 
-    logging.info("Converting aligned reads")
+    logger.info("Converting aligned reads")
 
     mode = "rb" if infile.suffix == ".bam" else "rc"
     ref_filename: str | None = str(reference) if reference else None
@@ -166,7 +180,7 @@ def wcx_convert(
         larp = -1
         larp2 = -1
 
-        logging.info(
+        logger.info(
             f"Working at {chromosome}; processing {int(chromosome_length / float(binsize) + 1)} bins"
         )
         counts = np.zeros(
@@ -229,7 +243,7 @@ def wcx_convert(
         )
 
     jobs: list[tuple[str, int, str]] = []
-    reads_per_chromosome_bin: dict[str, np.ndarray | None] = dict()
+    reads_per_chromosome_bin: dict[str, np.ndarray | None] = {}
     for index, chromosome in enumerate(reads_file.references):
         if re.match(
             r"^(?:chr)?(?:[1-9]|1[0-9]|2[0-2]|[XY])$",
@@ -342,4 +356,4 @@ def wcx_convert(
         )
 
     reads_file.close()
-    logging.info("Finished conversion")
+    logger.info("Finished conversion")

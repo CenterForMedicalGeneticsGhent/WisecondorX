@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import argparse
 import logging
 import os
@@ -25,6 +23,8 @@ from wisecondorx.predict_tools import (
     predict_gender,
 )
 
+logger = logging.getLogger(__name__)
+
 VERSION: str = __version__
 
 
@@ -37,24 +37,34 @@ def setup_logging(loglevel: str = "INFO") -> None:
 
 
 def wcx_predict(
-    infile: Path = typer.Argument(..., help=".npz input file"),
-    reference: Path = typer.Argument(
-        ..., help="Reference .npz, as previously created with newref"
-    ),
-    outid: str = typer.Argument(
-        ...,
-        help="Basename (w/o extension) of output files (paths are allowed, e.g. path/to/ID_1)",
-    ),
-    minrefbins: int = typer.Option(
-        150,
-        "--minrefbins",
-        help="Minimum amount of sensible reference bins per target bin.",
-    ),
-    maskrepeats: int = typer.Option(
-        5,
-        "--maskrepeats",
-        help="Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.",
-    ),
+    infile: Annotated[Path, typer.Argument(..., help=".npz input file")],
+    reference: Annotated[
+        Path,
+        typer.Argument(
+            ..., help="Reference .npz, as previously created with newref"
+        ),
+    ],
+    outid: Annotated[
+        str,
+        typer.Argument(
+            ...,
+            help="Basename (w/o extension) of output files (paths are allowed, e.g. path/to/ID_1)",
+        ),
+    ],
+    minrefbins: Annotated[
+        int,
+        typer.Option(
+            "--minrefbins",
+            help="Minimum amount of sensible reference bins per target bin.",
+        ),
+    ] = 150,
+    maskrepeats: Annotated[
+        int,
+        typer.Option(
+            "--maskrepeats",
+            help="Regions with distances > mean + sd * 3 will be masked. Number of masking cycles.",
+        ),
+    ] = 5,
     alpha: Annotated[
         float,
         typer.Option(
@@ -68,55 +78,70 @@ def wcx_predict(
         typer.Option(help="z-score cut-off for aberration calling.", min=0.0),
     ] = 5.0,
     beta: Annotated[
-        float,
+        float | None,
         typer.Option(
             min=0.0,
             max=1.0,
             help="When beta is given, --zscore is ignored and a ratio cut-off is used to call aberrations.",
         ),
     ] = None,
-    blacklist: Path = typer.Option(
-        None,
-        "--blacklist",
-        help="Blacklist that masks regions in output, structure of header-less file: chr...(/t)startpos(/t)endpos(/n)",
-    ),
-    gender: Sex = typer.Option(
-        None,
-        "--gender",
-        help="Force WisecondorX to analyze this case as a male (M) or a female (F)",
-    ),
-    ylim: str = typer.Option(
-        "def", "--ylim", help="y-axis limits for plotting. e.g. [-2,2]"
-    ),
-    bed: bool = typer.Option(
-        True,
-        "--bed",
-        help="Outputs tab-delimited .bed files, containing the most important information",
-    ),
-    plot: bool = typer.Option(False, "--plot", help="Output .png plots"),
-    cairo: bool = typer.Option(
-        True,
-        "--cairo",
-        help="Use cairo for plotting",
-    ),
-    add_plot_title: bool = typer.Option(
-        False,
-        "--add-plot-title",
-        help="Add the output name as plot title",
-    ),
-    seed: int = typer.Option(
-        42, "--seed", help="Seed for segmentation algorithm"
-    ),
-    regions: Path = typer.Option(
-        None,
-        "--regions",
-        help="bed file with regions to be marked on the output plot",
-    ),
+    blacklist: Annotated[
+        Path | None,
+        typer.Option(
+            "--blacklist",
+            help="Blacklist that masks regions in output, structure of header-less file: chr...(/t)startpos(/t)endpos(/n)",
+        ),
+    ] = None,
+    gender: Annotated[
+        Sex | None,
+        typer.Option(
+            "--gender",
+            help="Force WisecondorX to analyze this case as a male (M) or a female (F)",
+        ),
+    ] = None,
+    ylim: Annotated[
+        str,
+        typer.Option("--ylim", help="y-axis limits for plotting. e.g. [-2,2]"),
+    ] = "def",
+    bed: Annotated[
+        bool,
+        typer.Option(
+            "--bed",
+            help="Outputs tab-delimited .bed files, containing the most important information",
+        ),
+    ] = True,
+    plot: Annotated[
+        bool, typer.Option("--plot", help="Output .png plots")
+    ] = False,
+    cairo: Annotated[
+        bool,
+        typer.Option(
+            "--cairo",
+            help="Use cairo for plotting",
+        ),
+    ] = True,
+    add_plot_title: Annotated[
+        bool,
+        typer.Option(
+            "--add-plot-title",
+            help="Add the output name as plot title",
+        ),
+    ] = False,
+    seed: Annotated[
+        int, typer.Option("--seed", help="Seed for segmentation algorithm")
+    ] = 42,
+    regions: Annotated[
+        Path | None,
+        typer.Option(
+            "--regions",
+            help="bed file with regions to be marked on the output plot",
+        ),
+    ] = None,
 ) -> None:
     """
     Find copy number aberrations.
     """
-    logging.info("Starting CNA prediction")
+    logger.info("Starting CNA prediction")
 
     args = argparse.Namespace()
     args.infile = infile
@@ -138,35 +163,34 @@ def wcx_predict(
     args.regions = regions
 
     if not args.bed and not args.plot:
-        logging.critical(
+        logger.critical(
             "No output format selected. "
             "Select at least one of the supported output formats (--bed, --plot)"
         )
         sys.exit()
 
     if args.zscore <= 0:
-        logging.critical(
+        logger.critical(
             "Parameter --zscore should be a strictly positive number"
         )
         sys.exit()
 
-    if args.beta is not None:
-        if args.beta <= 0 or args.beta > 1:
-            logging.critical(
-                "Parameter --beta should be a strictly positive number lower than or equal to 1"
-            )
-            sys.exit()
+    if args.beta is not None and (args.beta <= 0 or args.beta > 1):
+        logger.critical(
+            "Parameter --beta should be a strictly positive number lower than or equal to 1"
+        )
+        sys.exit()
 
     if args.alpha <= 0 or args.alpha > 1:
-        logging.critical(
+        logger.critical(
             "Parameter --alpha should be a strictly positive number lower than or equal to 1"
         )
         sys.exit()
 
-    logging.info("Importing data ...")
+    logger.info("Importing data ...")
     ref_file = np.load(args.reference, encoding="latin1", allow_pickle=True)
     sample, sample_binsize = load_convert_output(args.infile)
-    n_reads = sum([sum(sample[x]) for x in sample.keys()])
+    n_reads = sum([sum(sample[x]) for x in sample])
 
     sample = scale_sample(sample, sample_binsize, int(ref_file["binsize"]))
 
@@ -181,7 +205,7 @@ def wcx_predict(
             gender = args.gender
         ref_gender = "F"
 
-    logging.info("Normalizing autosomes ...")
+    logger.info("Normalizing autosomes ...")
 
     results_r, results_z, results_w, ref_sizes, m_lr, m_z = normalize(
         args, sample, ref_file, "A"
@@ -189,7 +213,7 @@ def wcx_predict(
 
     if not ref_file["is_nipt"]:
         if not ref_file["has_male"] and gender == "M":
-            logging.warning(
+            logger.warning(
                 "This sample is male, whilst the reference is created with fewer than 5 males. "
                 "The female gonosomal reference will be used for X predictions. Note that these might "
                 "not be accurate. If the latter is desired, create a new reference and include more "
@@ -198,7 +222,7 @@ def wcx_predict(
             ref_gender = "F"
 
         elif not ref_file["has_female"] and gender == "F":
-            logging.warning(
+            logger.warning(
                 "This sample is female, whilst the reference is created with fewer than 5 females. "
                 "The male gonosomal reference will be used for XY predictions. Note that these might "
                 "not be accurate. If the latter is desired, create a new reference and include more "
@@ -206,7 +230,7 @@ def wcx_predict(
             )
             ref_gender = "M"
 
-    logging.info("Normalizing gonosomes ...")
+    logger.info("Normalizing gonosomes ...")
 
     null_ratios_aut_per_bin = ref_file["null_ratios"]
     null_ratios_gon_per_bin = ref_file[f"null_ratios.{ref_gender}"][
@@ -243,7 +267,7 @@ def wcx_predict(
     results_w = results_w / np.nanmean(results_w)
 
     if np.isnan(results_w).any() or np.isinf(results_w).any():
-        logging.warning(
+        logger.warning(
             "Non-numeric values found in weights -- reference too small. Circular binary segmentation and z-scoring will be unweighted"
         )
         results_w = np.ones(len(results_w))
@@ -263,27 +287,27 @@ def wcx_predict(
         "results_nr": null_ratios,
     }
 
-    for result in results:
+    for result, value in results.items():
         results[result] = get_post_processed_result(
-            args, results[result], ref_sizes, rem_input
+            args, value, ref_sizes, rem_input
         )
 
     log_trans(results, m_lr)
 
     if args.blacklist:
-        logging.info("Applying blacklist ...")
+        logger.info("Applying blacklist ...")
         apply_blacklist(rem_input, results)
 
-    logging.info("Executing circular binary segmentation ...")
+    logger.info("Executing circular binary segmentation ...")
 
     results["results_c"] = exec_cbs(rem_input, results)
 
     if args.bed:
-        logging.info("Writing tables ...")
+        logger.info("Writing tables ...")
         generate_output_tables(rem_input, results)
 
     if args.plot:
-        logging.info("Writing plots ...")
+        logger.info("Writing plots ...")
         data = {
             "ref_gender": str(rem_input["ref_gender"]),
             "beta": str(rem_input["args"].beta),
@@ -305,14 +329,17 @@ def wcx_predict(
 
         write_plots(data)
 
-    logging.info("Finished prediction")
+    logger.info("Finished prediction")
 
 
 def wcx_gender(
-    infile: Path = typer.Argument(..., help=".npz input file"),
-    reference: Path = typer.Argument(
-        ..., help="Reference .npz, as previously created with newref"
-    ),
+    infile: Annotated[Path, typer.Argument(..., help=".npz input file")],
+    reference: Annotated[
+        Path,
+        typer.Argument(
+            ..., help="Reference .npz, as previously created with newref"
+        ),
+    ],
 ) -> None:
     """
     Returns the sex of a .npz resulting from convert, based on a Gaussian mixture model trained during the newref phase.

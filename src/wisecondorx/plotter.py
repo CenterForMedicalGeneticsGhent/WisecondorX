@@ -399,7 +399,7 @@ def write_plots(data):
     ax_box_auto.boxplot(
         box_list[:22],
         labels=labels[:22],
-        flierprops=dict(marker="o", markersize=2, markerfacecolor=BLACK),
+        flierprops={"marker": "o", "markersize": 2, "markerfacecolor": BLACK},
     )
     ax_box_auto.set_ylim(
         min(l_whis_per_chr[:22]) if l_whis_per_chr[:22] else -1,
@@ -413,7 +413,11 @@ def write_plots(data):
         ax_box_sex.boxplot(
             box_list[22:],
             labels=labels[22:],
-            flierprops=dict(marker="o", markersize=2, markerfacecolor=BLACK),
+            flierprops={
+                "marker": "o",
+                "markersize": 2,
+                "markerfacecolor": BLACK,
+            },
         )
         y_sex_down = min(l_whis_per_chr[22:]) if l_whis_per_chr[22:] else -1
         y_sex_up = max(h_whis_per_chr[22:]) if h_whis_per_chr[22:] else 1

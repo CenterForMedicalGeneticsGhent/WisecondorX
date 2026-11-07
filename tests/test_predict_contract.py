@@ -16,7 +16,7 @@ class TestPredictContract(unittest.TestCase):
         class Args:
             maskrepeats = 1
 
-        results_r, results_z, results_w, ref_sizes, m_lr, m_z = normalize(
+        results_r, results_z, results_w, ref_sizes, _m_lr, _m_z = normalize(
             Args(), sample, ref, "A"
         )
 
@@ -51,7 +51,7 @@ class TestPredictContract(unittest.TestCase):
         class Args:
             maskrepeats = 1
 
-        results_r, results_z, results_w, ref_sizes, m_lr, m_z = normalize(
+        results_r, results_z, results_w, ref_sizes, _m_lr, _m_z = normalize(
             Args(), sample, ref, "M"
         )
 
