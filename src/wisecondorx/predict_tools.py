@@ -15,7 +15,7 @@ model trained during newref phase.
 
 def predict_gender(sample, trained_cutoff):
     Y_fraction = float(np.sum(sample["24"])) / float(
-        np.sum([np.sum(sample[x]) for x in sample.keys()])
+        np.sum([np.sum(sample[x]) for x in sample])
     )
     if Y_fraction > trained_cutoff:
         return "M"
@@ -209,7 +209,7 @@ and results_w if requested.
 def apply_blacklist(rem_input, results):
     blacklist = _import_bed(rem_input)
 
-    for chr in blacklist.keys():
+    for chr in blacklist:
         for s_e in blacklist[chr]:
             for pos in range(s_e[0], s_e[1]):
                 if len(results["results_r"]) < 24 and chr == 23:
@@ -223,8 +223,9 @@ def apply_blacklist(rem_input, results):
 
 def _import_bed(rem_input):
     bed = {}
-    for line in open(rem_input["args"].blacklist):
-        chr_name, s, e = line.strip().split("\t")
+    with open(rem_input["args"].blacklist) as f:
+        for line in f:
+            chr_name, s, e = line.strip().split("\t")
         if chr_name[:3] == "chr":
             chr_name = chr_name[3:]
         if chr_name == "X":

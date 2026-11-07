@@ -21,6 +21,8 @@ from sklearn.mixture import GaussianMixture
 from wisecondorx.overall_tools import gender_correct, scale_sample
 from wisecondorx.ref_qc import qc_reference
 
+logger = logging.getLogger(__name__)
+
 """
 Outputs preparation files of read depth normalized
 data and contains PCA information to execute between-
@@ -98,7 +100,7 @@ def tool_newref_prep(args, samples, gender, mask, bins_per_chr):
         class_bad_bins = dist_to_med > cutoff
         bad_bins_mask[class_mask] = class_bad_bins
         if np.any(class_bad_bins):
-            logging.info(
+            logger.info(
                 f"Removing {int(np.sum(class_bad_bins))} anomalous {class_name} bins based on PCA distance (cutoff={cutoff:.4f})"
             )
 
@@ -168,12 +170,12 @@ def _tool_newref_part(args, pca_corrected_data):
     within-sample reference creation.
     """
     if args.part[0] > args.part[1]:
-        logging.critical(
+        logger.critical(
             f"Part should be smaller or equal to total parts:{args.part[0]} > {args.part[1]} is wrong"
         )
         sys.exit()
     if args.part[0] < 0:
-        logging.critical(
+        logger.critical(
             f"Part should be at least zero: {args.part[0]} < 0 is wrong"
         )
         sys.exit()
@@ -246,7 +248,7 @@ def force_remove(file_id):
         try:
             os.remove(file_id)
             break
-        except Exception:
+        except OSError:
             print(
                 f"Attemp #{attemp}: Cannot remove {file_id}, because it is busy, trying again..."
             )
@@ -263,7 +265,7 @@ def tool_newref_merge(args, outfiles, trained_cutoff):
     for file_id in outfiles:
         npz_file = np.load(file_id, encoding="latin1", allow_pickle=True)
         gender = str(npz_file["gender"])
-        for component in [x for x in npz_file.keys() if x != "gender"]:
+        for component in [x for x in npz_file if x != "gender"]:
             if gender == "F":
                 final_ref["has_female"] = True
                 final_ref[f"{component!s}.F"] = npz_file[component]
@@ -295,7 +297,7 @@ def train_gender_model(args, samples):
     for sample in samples:
         y_fractions.append(
             float(np.sum(sample["24"]))
-            / float(np.sum([np.sum(sample[x]) for x in sample.keys()]))
+            / float(np.sum([np.sum(sample[x]) for x in sample]))
         )
     y_fractions = np.array(y_fractions)
 
@@ -313,13 +315,13 @@ def train_gender_model(args, samples):
     if args.plotyfrac is not None:
         import matplotlib.pyplot as plt
 
-        fig, ax = plt.subplots(figsize=(16, 6))
+        _fig, ax = plt.subplots(figsize=(16, 6))
         ax.hist(y_fractions, bins=100, density=True)
         ax.plot(gmm_x, gmm_y, "r-", label="Gaussian mixture fit")
         ax.set_xlim([0, 0.02])
         ax.legend(loc="best")
         plt.savefig(args.plotyfrac)
-        logging.info(f"Image written to {args.plotyfrac}, now quitting ...")
+        logger.info(f"Image written to {args.plotyfrac}, now quitting ...")
         sys.exit()
 
     if args.yfrac is not None:
@@ -334,11 +336,11 @@ def train_gender_model(args, samples):
             cut_off = gmm_x[local_min_i][0]
         else:
             cut_off = float(np.mean(gmm.means_))
-            logging.warning(
+            logger.warning(
                 "No local minimum found, using mean of GMM components as fallback"
             )
 
-        logging.info(f"Determined --yfrac cutoff: {round(cut_off, 4)!s}")
+        logger.info(f"Determined --yfrac cutoff: {round(cut_off, 4)!s}")
 
     genders[y_fractions > cut_off] = "M"
     genders[y_fractions < cut_off] = "F"
@@ -359,10 +361,8 @@ def get_mask(samples):
         max_len = max([sample[str(chr)].shape[0] for sample in samples])
         this_chr = np.zeros((max_len, sample_count), dtype=float)
         bins_per_chr.append(max_len)
-        i = 0
-        for sample in samples:
+        for i, sample in enumerate(samples):
             this_chr[:, i] = sample[str(chr)]
-            i += 1
         by_chr.append(this_chr)
     all_data = np.concatenate(by_chr, axis=0)
 
@@ -388,10 +388,8 @@ def normalize_and_mask(samples, chrs, mask):
     for chr in chrs:
         max_len = max([sample[str(chr)].shape[0] for sample in samples])
         this_chr = np.zeros((max_len, sample_count), dtype=float)
-        i = 0
-        for sample in samples:
+        for i, sample in enumerate(samples):
             this_chr[:, i] = sample[str(chr)]
-            i += 1
         by_chr.append(this_chr)
     all_data = np.concatenate(by_chr, axis=0)
 
@@ -435,7 +433,7 @@ def get_reference(
     bincount = masked_bins_per_chr_cum[-1]
 
     start_num, end_num = _get_part(part - 1, split_parts, bincount)
-    logging.info(
+    logger.info(
         f"Working on thread {part} of {split_parts}, meaning bins {start_num} up to {end_num}"
     )
     regions = _split_by_chr(start_num, end_num, masked_bins_per_chr_cum)
@@ -577,17 +575,25 @@ def _build_branch_masks(samples, genders, is_nipt):
 
 
 def wcx_newref(
-    infiles: list[Path] = typer.Argument(
-        ...,
-        help="Path to all reference data files (e.g. path/to/reference/*.npz)",
-    ),
-    outfile: Path = typer.Argument(
-        ...,
-        help="Path and filename for the reference output (e.g. path/to/myref.npz)",
-    ),
-    nipt: bool = typer.Option(False, "--nipt", help="Use flag for NIPT"),
+    infiles: Annotated[
+        list[Path],
+        typer.Argument(
+            ...,
+            help="Path to all reference data files (e.g. path/to/reference/*.npz)",
+        ),
+    ],
+    outfile: Annotated[
+        Path,
+        typer.Argument(
+            ...,
+            help="Path and filename for the reference output (e.g. path/to/myref.npz)",
+        ),
+    ],
+    nipt: Annotated[
+        bool, typer.Option("--nipt", help="Use flag for NIPT")
+    ] = False,
     yfrac: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--yfrac",
             min=0.0,
@@ -595,25 +601,34 @@ def wcx_newref(
             help="Use to manually set the Y read fraction cutoff, which defines sex",
         ),
     ] = None,
-    plotyfrac: Path = typer.Option(
-        None,
-        "--plotyfrac",
-        help="Path to yfrac .png plot for optimization; software will stop after plotting",
-    ),
-    refsize: int = typer.Option(
-        300, "--refsize", help="Amount of reference locations per target"
-    ),
-    binsize: int = typer.Option(
-        5000, "--binsize", help="Size of target bins in base pairs"
-    ),
-    cpus: int = typer.Option(
-        1, "--cpus", help="Use multiple cores to find reference bins"
-    ),
+    plotyfrac: Annotated[
+        Path | None,
+        typer.Option(
+            "--plotyfrac",
+            help="Path to yfrac .png plot for optimization; software will stop after plotting",
+        ),
+    ] = None,
+    refsize: Annotated[
+        int,
+        typer.Option(
+            "--refsize", help="Amount of reference locations per target"
+        ),
+    ] = 300,
+    binsize: Annotated[
+        int,
+        typer.Option("--binsize", help="Size of target bins in base pairs"),
+    ] = 5000,
+    cpus: Annotated[
+        int,
+        typer.Option(
+            "--cpus", help="Use multiple cores to find reference bins"
+        ),
+    ] = 1,
 ) -> None:
     """
     Create a new reference using healthy reference samples.
     """
-    logging.info("Creating new reference")
+    logger.info("Creating new reference")
 
     args = argparse.Namespace()
     args.infiles = infiles
@@ -625,12 +640,11 @@ def wcx_newref(
     args.binsize = binsize
     args.cpus = cpus
 
-    if args.yfrac is not None:
-        if args.yfrac < 0 or args.yfrac > 1:
-            logging.critical(
-                "Parameter --yfrac should be a positive number lower than or equal to 1"
-            )
-            sys.exit()
+    if args.yfrac is not None and (args.yfrac < 0 or args.yfrac > 1):
+        logger.critical(
+            "Parameter --yfrac should be a positive number lower than or equal to 1"
+        )
+        sys.exit()
 
     split_path = list(os.path.split(args.outfile))
     if split_path[-1][-4:] == ".npz":
@@ -643,20 +657,20 @@ def wcx_newref(
     args.partfile = f"{base_path}_part"
 
     samples = []
-    logging.info("Importing data ...")
+    logger.info("Importing data ...")
     for infile in args.infiles:
-        logging.info(f"Loading: {infile}")
+        logger.info(f"Loading: {infile}")
         npzdata = np.load(infile, encoding="latin1", allow_pickle=True)
         sample = npzdata["sample"].item()
         binsize = int(npzdata["binsize"])
-        logging.info(f"Binsize: {int(binsize)}")
+        logger.info(f"Binsize: {int(binsize)}")
         samples.append(scale_sample(sample, binsize, args.binsize))
 
     samples = np.array(samples)
     genders, trained_cutoff = train_gender_model(args, samples)
 
     if genders.count("F") < 5 and args.nipt:
-        logging.warning(
+        logger.warning(
             "A NIPT reference should have at least 5 female feti samples. Removing --nipt flag."
         )
         args.nipt = False
@@ -673,20 +687,20 @@ def wcx_newref(
 
     outfiles = []
     if len(genders) > 9:
-        logging.info("Starting autosomal reference creation ...")
+        logger.info("Starting autosomal reference creation ...")
         args.tmpoutfile = f"{args.basepath}.tmp.A.npz"
         outfiles.append(args.tmpoutfile)
         tool_newref_prep(args, samples, "A", mask_A, bins_per_chr)
-        logging.info("This might take a while ...")
+        logger.info("This might take a while ...")
         tool_newref_main(args, args.cpus)
     else:
-        logging.critical(
+        logger.critical(
             "Provide at least 10 samples to enable the generation of a reference."
         )
         sys.exit()
 
     if genders.count("F") > 4:
-        logging.info("Starting female gonosomal reference creation ...")
+        logger.info("Starting female gonosomal reference creation ...")
         args.tmpoutfile = f"{args.basepath}.tmp.F.npz"
         outfiles.append(args.tmpoutfile)
         mask_F = np.copy(mask_A)
@@ -695,16 +709,16 @@ def wcx_newref(
         tool_newref_prep(
             args, samples[np.array(genders) == "F"], "F", mask_F, bins_per_chr
         )
-        logging.info("This might take a while ...")
+        logger.info("This might take a while ...")
         tool_newref_main(args, 1)
     else:
-        logging.warning(
+        logger.warning(
             "Provide at least 5 female samples to enable normalization of female gonosomes."
         )
 
     if not args.nipt:
         if genders.count("M") > 4:
-            logging.info("Starting male gonosomal reference creation ...")
+            logger.info("Starting male gonosomal reference creation ...")
             args.tmpoutfile = f"{args.basepath}.tmp.M.npz"
             outfiles.append(args.tmpoutfile)
             mask_M = np.copy(mask_A)
@@ -719,13 +733,13 @@ def wcx_newref(
             )
             tool_newref_main(args, 1)
         else:
-            logging.warning(
+            logger.warning(
                 "Provide at least 5 male samples to enable normalization of male gonosomes."
             )
 
     tool_newref_merge(args, outfiles, trained_cutoff)
 
-    logging.info("Running QC on the newly created reference...")
+    logger.info("Running QC on the newly created reference...")
     qc_reference(args.outfile)
 
-    logging.info("Finished creating reference")
+    logger.info("Finished creating reference")
