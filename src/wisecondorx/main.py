@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 
+import argparse
 import logging
 import os
 import sys
 import warnings
+from pathlib import Path
 from typing import Annotated
+
 import numpy as np
 import typer
-import argparse
-from pathlib import Path
-from wisecondorx.convert import wcx_convert
-from wisecondorx.convert import load_convert_output
-from wisecondorx.newref import wcx_newref
-from wisecondorx.overall_tools import gender_correct, scale_sample, Sex
-from wisecondorx.predict_control import normalize, get_post_processed_result
-from wisecondorx.predict_output import generate_output_tables
-from wisecondorx.plotter import write_plots
-from wisecondorx.predict_tools import (
-    log_trans,
-    exec_cbs,
-    apply_blacklist,
-    predict_gender,
-)
 
 from wisecondorx import __version__
+from wisecondorx.convert import load_convert_output, wcx_convert
+from wisecondorx.newref import wcx_newref
+from wisecondorx.overall_tools import Sex, gender_correct, scale_sample
+from wisecondorx.plotter import write_plots
+from wisecondorx.predict_control import get_post_processed_result, normalize
+from wisecondorx.predict_output import generate_output_tables
+from wisecondorx.predict_tools import (
+    apply_blacklist,
+    exec_cbs,
+    log_trans,
+    predict_gender,
+)
 
 VERSION: str = __version__
 
@@ -209,7 +209,7 @@ def wcx_predict(
     logging.info("Normalizing gonosomes ...")
 
     null_ratios_aut_per_bin = ref_file["null_ratios"]
-    null_ratios_gon_per_bin = ref_file["null_ratios.{}".format(ref_gender)][
+    null_ratios_gon_per_bin = ref_file[f"null_ratios.{ref_gender}"][
         len(null_ratios_aut_per_bin) :
     ]
 
@@ -224,13 +224,11 @@ def wcx_predict(
         "n_reads": n_reads,
         "ref_gender": ref_gender,
         "gender": gender,
-        "mask": ref_file["mask.{}".format(ref_gender)],
-        "bins_per_chr": ref_file["bins_per_chr.{}".format(ref_gender)],
-        "masked_bins_per_chr": ref_file[
-            "masked_bins_per_chr.{}".format(ref_gender)
-        ],
+        "mask": ref_file[f"mask.{ref_gender}"],
+        "bins_per_chr": ref_file[f"bins_per_chr.{ref_gender}"],
+        "masked_bins_per_chr": ref_file[f"masked_bins_per_chr.{ref_gender}"],
         "masked_bins_per_chr_cum": ref_file[
-            "masked_bins_per_chr_cum.{}".format(ref_gender)
+            f"masked_bins_per_chr_cum.{ref_gender}"
         ],
     }
 
@@ -265,7 +263,7 @@ def wcx_predict(
         "results_nr": null_ratios,
     }
 
-    for result in results.keys():
+    for result in results:
         results[result] = get_post_processed_result(
             args, results[result], ref_sizes, rem_input
         )

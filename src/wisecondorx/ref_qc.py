@@ -132,9 +132,9 @@ def _legacy_autosomal_prefix_compat_issues(ref):
     a_autosomal_prefix = np.atleast_1d(ref["mask"][...])[:a_autosomal_span]
 
     for suf in [".F", ".M"]:
-        bins_key = "bins_per_chr{}".format(suf)
-        cum_key = "masked_bins_per_chr_cum{}".format(suf)
-        mask_key = "mask{}".format(suf)
+        bins_key = f"bins_per_chr{suf}"
+        cum_key = f"masked_bins_per_chr_cum{suf}"
+        mask_key = f"mask{suf}"
         if bins_key not in ref or cum_key not in ref or mask_key not in ref:
             continue
 
@@ -147,9 +147,7 @@ def _legacy_autosomal_prefix_compat_issues(ref):
         s_autosomal_masked = int(s_cum[21])
         if s_autosomal_masked != a_autosomal_masked:
             issues.append(
-                "{} autosomal masked bins ({}) differ from A ({})".format(
-                    suf, s_autosomal_masked, a_autosomal_masked
-                )
+                f"{suf} autosomal masked bins ({s_autosomal_masked}) differ from A ({a_autosomal_masked})"
             )
 
         s_autosomal_prefix = np.atleast_1d(ref[mask_key][...])[
@@ -159,9 +157,7 @@ def _legacy_autosomal_prefix_compat_issues(ref):
             s_autosomal_prefix, a_autosomal_prefix
         ):
             issues.append(
-                "{} autosomal mask prefix differs from A (legacy predict incompatible)".format(
-                    suf
-                )
+                f"{suf} autosomal mask prefix differs from A (legacy predict incompatible)"
             )
     return issues
 
@@ -265,9 +261,9 @@ def qc_reference(npz_path: Path):
         ref.close()
         return 2
 
-    logging.info("Starting ref-QC for file: {}".format(npz))
+    logging.info(f"Starting ref-QC for file: {npz}")
     if binsize:
-        logging.info("Reference binsize: {} bp".format(binsize))
+        logging.info(f"Reference binsize: {binsize} bp")
     else:
         logging.info("Reference binsize: (unknown)")
 
@@ -282,7 +278,7 @@ def qc_reference(npz_path: Path):
     }
 
     for issue in compat_issues:
-        logging.error("[COMPAT] {}".format(issue))
+        logging.error(f"[COMPAT] {issue}")
     if compat_issues:
         worst = max(worst, 2)
 

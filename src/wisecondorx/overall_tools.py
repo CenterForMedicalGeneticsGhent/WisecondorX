@@ -2,14 +2,14 @@
 
 import json
 import logging
+import math
 import os
 import subprocess
 import sys
-import math
+from enum import Enum
 
 import numpy as np
 import pandas as pd
-from enum import Enum
 
 """
 Scales the bin size of a sample.npz to the one  
@@ -34,9 +34,7 @@ def scale_sample(sample, from_size, to_size):
         or to_size % from_size > 0
     ):
         logging.critical(
-            "Impossible binsize scaling requested: {} to {}".format(
-                int(from_size), int(to_size)
-            )
+            f"Impossible binsize scaling requested: {int(from_size)} to {int(to_size)}"
         )
         sys.exit()
 
@@ -80,12 +78,12 @@ def exec_R(json_dict):
     json.dump(json_dict, open(json_dict["infile"], "w"))
 
     r_cmd = ["Rscript", json_dict["R_script"], "--infile", json_dict["infile"]]
-    logging.debug("CBS cmd: {}".format(r_cmd))
+    logging.debug(f"CBS cmd: {r_cmd}")
 
     try:
         subprocess.check_call(r_cmd)
     except subprocess.CalledProcessError as e:
-        logging.critical("Rscript failed: {}".format(e))
+        logging.critical(f"Rscript failed: {e}")
         sys.exit()
     if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
         os.remove(json_dict["infile"])
